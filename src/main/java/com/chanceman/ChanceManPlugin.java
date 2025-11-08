@@ -58,6 +58,7 @@ public class ChanceManPlugin extends Plugin
     @Inject private ChatMessageManager chatMessageManager;
     @Getter @Inject private ItemManager itemManager;
     @Inject private ChanceManOverlay chanceManOverlay;
+    @Inject private ChoicemanOverlay choicemanOverlay;
     @Inject private DropsTooltipOverlay dropsTooltipOverlay;
     @Inject private Gson gson;
     @Inject private ChanceManConfig config;
@@ -116,6 +117,7 @@ public class ChanceManPlugin extends Plugin
         dropCache.getAllNpcData();
         eventBus.register(accountManager);
         overlayManager.add(chanceManOverlay);
+        overlayManager.add(choicemanOverlay);
         overlayManager.add(dropsTooltipOverlay);
 
         fileExecutor = Executors.newSingleThreadExecutor(r -> {
@@ -210,6 +212,7 @@ public class ChanceManPlugin extends Plugin
         if (overlayManager != null)
         {
             overlayManager.remove(chanceManOverlay);
+            overlayManager.remove(choicemanOverlay);
             overlayManager.remove(dropsTooltipOverlay);
         }
         if (rollAnimationManager != null)

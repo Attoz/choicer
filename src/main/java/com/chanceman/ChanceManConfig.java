@@ -169,4 +169,26 @@ default boolean includeUntradeable() {
     {
         return 150;
     }
+
+      @ConfigItem(
+            keyName = "enableChoiceman",
+            name = "Enable Choiceman",
+            description = "Roll multiple options and pick one to unlock.",
+            position = 18
+    )
+    default boolean enableChoiceman()
+    {
+        return false;
+    }
+    @net.runelite.client.config.Range(min = 2, max = 5)
+    @ConfigItem(
+            keyName = "choicemanOptionCount",
+            name = "Choiceman Options",
+            description = "Number of choices presented when Choiceman is enabled.",
+            position = 19
+    )
+    default int choicemanOptionCount()
+    {
+        return 5;
+    }
 }

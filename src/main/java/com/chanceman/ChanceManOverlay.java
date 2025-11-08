@@ -33,7 +33,7 @@ import java.util.function.Supplier;
  */
 @Singleton
 @Slf4j
-public class ChanceManOverlay extends Overlay {
+public class ChanceManOverlay extends Overlay implements RollOverlay {
     // Snap behavior and timing
     private static final float SNAP_NEXT_THRESHOLD = 0.55f;
     private static final long SNAP_DURATION_MS = 350L;

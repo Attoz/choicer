@@ -147,6 +147,16 @@ public interface ChanceManConfig extends Config
     {
         return true;
     }
+    
+    @ConfigItem(
+    keyName = "includeUntradeable",
+    name = "Include Untradeable Items",
+    description = "Enable to include untradeable items in the rolling system",
+    position = 17  // Position after the dimLockedItemsOpacity config
+)
+default boolean includeUntradeable() {
+    return false;  // Default to false to maintain current behavior
+}
 
     @net.runelite.client.config.Range(min = 0, max = 255)
     @ConfigItem(

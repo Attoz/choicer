@@ -16,6 +16,7 @@ import com.chanceman.ui.ItemDimmerController;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import com.chanceman.managers.RollAnimationManager;
 import com.chanceman.managers.RolledItemsManager;
 import com.chanceman.managers.UnlockedItemsManager;
@@ -42,6 +43,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+@Slf4j
 @PluginDescriptor(
         name = "ChanceMan",
         description = "Locks tradeable items until unlocked via a random roll.",
@@ -250,18 +252,11 @@ public class ChanceManPlugin extends Plugin
     /** Refreshes the list of tradeable item IDs based on the current configuration. */
     public void refreshTradeableItems() {
         clientThread.invokeLater(() -> {
+            Set<Integer> unlockedSnapshot = unlockedItemsManager.getUnlockedItems();
             allTradeableItems.clear();
             for (int i = 0; i < 40000; i++) {
                 ItemComposition comp = itemManager.getItemComposition(i);
-                if (comp != null && comp.isTradeable() && !isNotTracked(i)
-                        && !ItemsFilter.isBlocked(i, config)) {
-                    if (config.freeToPlay() && comp.isMembers()) {
-                        continue;
-                    }
-                    if (!ItemsFilter.isPoisonEligible(i, config.requireWeaponPoison(),
-                            unlockedItemsManager.getUnlockedItems())) {
-                        continue;
-                    }
+                if (isEligibleForLocking(i, comp, unlockedSnapshot)) {
                     allTradeableItems.add(i);
                 }
             }
@@ -284,6 +279,7 @@ public class ChanceManPlugin extends Plugin
             case "enableFlatpacks":
             case "enableItemSets":
             case "requireWeaponPoison":
+            case "includeUntradeable":
                 refreshTradeableItems();
                 break;
             case "showRareDropTable":
@@ -381,7 +377,7 @@ public class ChanceManPlugin extends Plugin
         TileItem tileItem = (TileItem) event.getItem();
         int itemId = EnsouledHeadMapping.toTradeableId(tileItem.getId());
         int canonicalItemId = itemManager.canonicalize(itemId);
-        if (!isTradeable(canonicalItemId) || isNotTracked(canonicalItemId))
+        if (!isEligibleForLocking(canonicalItemId))
         {
             return;
         }
@@ -415,7 +411,7 @@ public class ChanceManPlugin extends Plugin
                 int rawItemId = item.getId();
                 int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
                 int canonicalId = itemManager.canonicalize(mapped);
-                if (!isTradeable(canonicalId) || isNotTracked(canonicalId))
+                if (!isEligibleForLocking(canonicalId))
                 {
                     continue;
                 }
@@ -455,6 +451,56 @@ public class ChanceManPlugin extends Plugin
     {
         ItemComposition comp = itemManager.getItemComposition(itemId);
         return comp != null && comp.isTradeable();
+    }
+
+    private boolean isEligibleForLocking(int itemId)
+    {
+        ItemComposition comp = itemManager.getItemComposition(itemId);
+        return isEligibleForLocking(itemId, comp);
+    }
+
+    private boolean isEligibleForLocking(int itemId, ItemComposition comp)
+    {
+        return isEligibleForLocking(itemId, comp, null);
+    }
+
+    private boolean isEligibleForLocking(int itemId, ItemComposition comp, Set<Integer> unlockedSnapshot)
+    {
+        if (comp == null)
+        {
+            return false;
+        }
+        String name = comp.getName();
+        if (name == null || name.trim().isEmpty() || name.equalsIgnoreCase("null"))
+        {
+            return false;
+        }
+        if (comp.getPlaceholderTemplateId() != -1)
+        {
+            return false;
+        }
+        if (!config.includeUntradeable() && !comp.isTradeable())
+        {
+            return false;
+        }
+        if (isNotTracked(itemId))
+        {
+            return false;
+        }
+        if (ItemsFilter.isBlocked(itemId, config))
+        {
+            return false;
+        }
+        if (config.freeToPlay() && comp.isMembers())
+        {
+            return false;
+        }
+        Set<Integer> unlocked = unlockedSnapshot != null ? unlockedSnapshot : unlockedItemsManager.getUnlockedItems();
+        return ItemsFilter.isPoisonEligible(
+                itemId,
+                config.requireWeaponPoison(),
+                unlocked
+        );
     }
 
     public boolean isNotTracked(int itemId)

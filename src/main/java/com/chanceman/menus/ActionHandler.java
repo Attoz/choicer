@@ -163,12 +163,11 @@ public class ActionHandler {
 
 	/**
 	 * @param itemId canonicalized item ID of a ground item
-	 * @return true if it’s tradeable, tracked, and still locked
+	 * @return true if it’s tracked by the plugin and still locked
 	 */
 	private boolean isLockedGroundItem(int itemId)
 	{
-		return plugin.isTradeable(itemId)
-				&& !plugin.isNotTracked(itemId)
+		return plugin.isInPlay(itemId)
 				&& !unlockedItemsManager.isUnlocked(itemId);
 	}
 
@@ -221,8 +220,7 @@ public class ActionHandler {
 					: event.getMenuEntry().getItemId();
 			int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
 			int canonicalGroundId = itemManager.canonicalize(mapped);
-			if (plugin.isTradeable(canonicalGroundId)
-					&& !plugin.isNotTracked(canonicalGroundId)
+			if (plugin.isInPlay(canonicalGroundId)
 					&& unlockedItemsManager != null
 					&& !unlockedItemsManager.isUnlocked(canonicalGroundId)) {
 				event.consume();

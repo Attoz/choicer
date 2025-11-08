@@ -1,8 +1,8 @@
 package com.chanceman.ui;
 
-import com.chanceman.managers.UnlockedItemsManager;
+import com.chanceman.ChanceManPlugin;
 import com.chanceman.filters.EnsouledHeadMapping;
-import lombok.RequiredArgsConstructor;
+import com.chanceman.managers.UnlockedItemsManager;
 import lombok.Setter;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -18,21 +18,17 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Dims item icon widgets when item is TRADEABLE && LOCKED.
+ * Dims any tracked-and-locked item widgets.
  * Runs at BeforeRender so scripts in the same frame can't overwrite opacity.
  */
 @Singleton
-@RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ItemDimmerController {
     private final Client client;
     private final UnlockedItemsManager unlockedItemsManager;
     private final ItemManager itemManager;
-
-    // Cache (long-lived) for tradeable-by-canonical-id
-    private final ConcurrentHashMap<Integer, Boolean> tradeableCache = new ConcurrentHashMap<>();
+    private final ChanceManPlugin plugin;
 
     // Cache (per-frame) for "should dim?" decisions by raw item id
     private final Map<Integer, Boolean> dimDecisionCache = new HashMap<>(256);
@@ -40,6 +36,19 @@ public class ItemDimmerController {
     private volatile int dimOpacity = 150;
     @Setter
     private volatile boolean enabled = true;
+
+    @Inject
+    public ItemDimmerController(
+            Client client,
+            UnlockedItemsManager unlockedItemsManager,
+            ItemManager itemManager,
+            ChanceManPlugin plugin
+    ) {
+        this.client = client;
+        this.unlockedItemsManager = unlockedItemsManager;
+        this.itemManager = itemManager;
+        this.plugin = plugin;
+    }
 
     public void setDimOpacity(int opacity) {
         this.dimOpacity = Math.max(0, Math.min(255, opacity));
@@ -109,7 +118,7 @@ public class ItemDimmerController {
         final int mappedItemId = EnsouledHeadMapping.toTradeableId(rawItemId);
         final int canonicalItemId = canonicalize(mappedItemId);
         if (canonicalItemId <= 0) return false;
-        if (!isTradeableCanonical(canonicalItemId)) return false;
+        if (!plugin.isInPlay(canonicalItemId)) return false;
         return !isUnlocked(mappedItemId, canonicalItemId);
     }
 
@@ -179,22 +188,4 @@ public class ItemDimmerController {
         return w != null && w.getItemId() > 0 && w.getItemQuantity() == 0;
     }
 
-    private boolean isTradeableCanonical(int canonicalItemId) {
-        try {
-            final Boolean cached = tradeableCache.get(canonicalItemId);
-            if (cached != null) return cached;
-
-            boolean tradeable = false;
-            final ItemComposition comp = itemManager.getItemComposition(canonicalItemId);
-            if (comp != null) {
-                tradeable = comp.isTradeable();
-            }
-
-            tradeableCache.put(canonicalItemId, tradeable);
-            return tradeable;
-        } catch (Exception e) {
-            // If unsure, err on the side of NOT dimming
-            return false;
-        }
-    }
 }

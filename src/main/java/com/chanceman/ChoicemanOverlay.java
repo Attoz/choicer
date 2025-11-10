@@ -132,7 +132,11 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     public void setSelectionPending(boolean pending)
     {
         this.selectionPending = pending;
-        if (!pending)
+        if (pending)
+        {
+            syncSelectionOptionsWithColumns();
+        }
+        else
         {
             synchronized (columnHitboxes)
             {
@@ -163,6 +167,48 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
             }
         }
         return null;
+    }
+
+    private void syncSelectionOptionsWithColumns()
+    {
+        List<Integer> snapped = captureSnappedItems();
+        if (!snapped.isEmpty())
+        {
+            currentOptions = snapped;
+        }
+    }
+
+    private List<Integer> captureSnappedItems()
+    {
+        List<Integer> snapped = new ArrayList<>();
+        synchronized (rollingColumns)
+        {
+            if (rollingColumns.isEmpty())
+            {
+                return snapped;
+            }
+            final int centerIndex = ICON_COUNT / 2;
+            final int columns = Math.min(columnCount, rollingColumns.size());
+            for (int col = 0; col < columns; col++)
+            {
+                List<Integer> column = rollingColumns.get(col);
+                if (column.isEmpty())
+                {
+                    snapped.add(0);
+                    continue;
+                }
+                final int winnerIndex = Math.min(centerIndex + winnerDelta, column.size() - 1);
+                if (winnerIndex >= 0 && winnerIndex < column.size())
+                {
+                    snapped.add(column.get(winnerIndex));
+                }
+                else
+                {
+                    snapped.add(0);
+                }
+            }
+        }
+        return snapped;
     }
     @Inject
     public ChoicemanOverlay(Client client, ItemManager itemManager)
@@ -307,7 +353,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                 ? (vpY + SELECTION_TOP_MARGIN)
                 : vpY + OFFSET_TOP;
 
-        final float middleIndex = ICON_COUNT / 2f;
+        final float middleIndex = (ICON_COUNT - 1) / 2f;
         final int iconSize = selectionMode
                 ? Math.max(Math.min(slotWidth, slotHeight) - 32, Math.round(ICON_W * 1.6f))
                 : ICON_W;

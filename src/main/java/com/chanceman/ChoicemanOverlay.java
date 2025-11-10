@@ -44,14 +44,17 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private static final int ICON_W = 32;
     private static final int ICON_H = 32;
     private static final int SPACING = 5;
-    private static final float STEP = ICON_H + SPACING;
 
-    private static final int OFFSET_TOP = 20;
-    private static final int BOX_SHIFT_X = 120;
     private static final int FRAME_CONTENT_INSET = 4;
     private static final int SLOT_PADDING_X = 18;
     private static final int SLOT_PADDING_Y = 12;
     private static final int SELECTION_TOP_MARGIN = 45;
+    private static final float CHOICE_SLOT_SCALE = 1.85f;
+    private static final int MIN_CHOICE_SLOT_WIDTH = 180;
+    private static final int MIN_CHOICE_SLOT_HEIGHT = 120;
+    private static final int SCROLL_ICON_TARGET = 80;
+    private static final int SCROLL_ITEM_GAP = 12;
+    private static final float DEFAULT_STEP = SCROLL_ICON_TARGET + SCROLL_ITEM_GAP;
     private static final Color SLOT_BORDER = new Color(201, 168, 92, 230);
     private static final Color SLOT_FILL_TOP = new Color(22, 22, 22, 235);
     private static final Color SLOT_FILL_BOTTOM = new Color(10, 10, 10, 235);
@@ -111,7 +114,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         columnCount = determineColumnCount();
         for (int i = 0; i < columnOffsetAdjust.length; i++)
         {
-            columnOffsetAdjust[i] = spinRandom.nextFloat() * STEP;
+            columnOffsetAdjust[i] = spinRandom.nextFloat() * DEFAULT_STEP;
             columnSpeedScale[i] = 0.75f + spinRandom.nextFloat() * 0.45f; // 0.75x – 1.2x
         }
     }
@@ -305,16 +308,23 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         if (!isAnimating && !selectionPending) {
             return null;
         }
+        
+        final Shape oldClip = g.getClip();
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
         final long nowMs = System.currentTimeMillis();
         final long elapsed = nowMs - rollStartMs;
-        final boolean selectionMode = selectionPending && !currentOptions.isEmpty();
-        final boolean highlightPhase = selectionMode || (elapsed > rollDurationMs);
+        final boolean clickableSelection = selectionPending && !currentOptions.isEmpty();
+        final boolean highlightPhase = clickableSelection || (elapsed > rollDurationMs);
 
-        if (!selectionMode && elapsed > rollDurationMs + HIGHLIGHT_DURATION_MS) {
+        if (clickableSelection && currentOptions.size() < columnCount)
+        {
+            syncSelectionOptionsWithColumns();
+        }
+
+        if (!clickableSelection && elapsed > rollDurationMs + HIGHLIGHT_DURATION_MS) {
             isAnimating = false;
             return null;
         }
@@ -327,7 +337,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         }
         lastUpdateNanos = nowNanos;
 
-        if (!selectionMode) {
+        if (!highlightPhase) {
             final float t = (rollDurationMs > 0) ? Math.min(1f, elapsed / (float) rollDurationMs) : 1f;
             final float eased = (float) Math.pow(1f - t, 3);
             currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * eased;
@@ -338,57 +348,34 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         final int vpWidth = client.getViewportWidth();
         final int centerX = vpX + (vpWidth / 2);
 
-        final float slotScale = selectionMode ? 1.85f : 1f;
+        final float slotScale = CHOICE_SLOT_SCALE;
         final int baseSlotWidth = ICON_W + SLOT_PADDING_X * 2;
         final int baseSlotHeight = ICON_H + SLOT_PADDING_Y * 2;
-        final int slotWidth = selectionMode
-                ? Math.max(Math.round(baseSlotWidth * slotScale), 180)
-                : baseSlotWidth;
-        final int slotHeight;
         final int rollingVisibleItems = Math.max(2, VISIBLE_ROLLING_ITEM_COUNT);
-        if (selectionMode)
-        {
-            slotHeight = Math.max(Math.round(baseSlotHeight * slotScale), 120);
-        }
-        else
-        {
-            final int rollingContentHeight = (int)(ICON_H + (rollingVisibleItems - 1) * STEP);
-            slotHeight = rollingContentHeight + SLOT_PADDING_Y * 2;
-        }
+        final int rollingContentSpan = (int)(
+                SCROLL_ICON_TARGET * rollingVisibleItems
+                        + SCROLL_ITEM_GAP * (rollingVisibleItems - 1)
+        );
+        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), MIN_CHOICE_SLOT_WIDTH);
+        final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), MIN_CHOICE_SLOT_HEIGHT);
+        final int slotHeight = Math.max(scaledSlotHeight, rollingContentSpan + SLOT_PADDING_Y * 2);
         final int spacing = Math.max(14, Math.round(COLUMN_SPACING * slotScale));
         final int totalWidth = columnCount * slotWidth + (columnCount - 1) * spacing;
-        final int slotsLeftX = centerX - ( totalWidth / 2 ) + (selectionMode ? 0 : BOX_SHIFT_X);
-        final int slotTopY = selectionMode
-                ? (vpY + SELECTION_TOP_MARGIN)
-                : vpY + OFFSET_TOP;
+        final int slotsLeftX = centerX - ( totalWidth / 2 );
+        final int slotTopY = vpY + SELECTION_TOP_MARGIN;
 
         final float middleIndex = (ICON_COUNT - 1) / 2f;
-        final int iconSize = selectionMode
-                ? Math.max(Math.min(slotWidth, slotHeight) - 32, Math.round(ICON_W * 1.6f))
-                : ICON_W;
-        final int iconPadX;
-        final int iconPadY;
-        if (selectionMode)
-        {
-            iconPadX = Math.max(18, (slotWidth - iconSize) / 2);
-            iconPadY = Math.max(12, (slotHeight - iconSize) / 2 - LABEL_FONT.getSize());
-        }
-        else
-        {
-            iconPadX = SLOT_PADDING_X;
-            iconPadY = SLOT_PADDING_Y;
-        }
-        final float contentCenterY;
-        if (selectionMode)
-        {
-            contentCenterY = slotTopY + iconPadY + ICON_H / 2f;
-        }
-        else
-        {
-            final int rollingContentHeight = slotHeight - iconPadY * 2;
-            contentCenterY = slotTopY + iconPadY + rollingContentHeight / 2f;
-        }
-        final float iconsTopYF = contentCenterY - middleIndex * STEP - ICON_H / 2f;
+        final float scrollGap = SCROLL_ITEM_GAP;
+        final float maxIconWidth = slotWidth - SLOT_PADDING_X * 2f;
+        final float maxIconHeight = (slotHeight - SLOT_PADDING_Y * 2f - (rollingVisibleItems - 1) * scrollGap) / rollingVisibleItems;
+        final float rollingIconSize = Math.max(ICON_W, Math.min(maxIconWidth, maxIconHeight));
+        final int iconSize = Math.max(1, Math.round(rollingIconSize));
+        final float activeStep = iconSize + scrollGap;
+        final int iconPadX = Math.max(SLOT_PADDING_X, (slotWidth - iconSize) / 2);
+        final int iconPadY = SLOT_PADDING_Y;
+        final int rollingContentHeight = slotHeight - iconPadY * 2;
+        final float contentCenterY = slotTopY + iconPadY + rollingContentHeight / 2f;
+        final float iconsTopYF = contentCenterY - middleIndex * activeStep - iconSize / 2f;
         final int[] columnXs = new int[columnCount];
         for (int col = 0; col < columnCount; col++)
         {
@@ -396,15 +383,11 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         }
         for (int col = 0; col < columnCount; col++)
         {
-            if (selectionMode)
-            {
-                continue;
-            }
             float adjust = columnOffsetAdjust[col];
             if (!highlightPhase && !isSnapping)
             {
                 adjust += (columnSpeedScale[col] - 1f) * currentSpeed * dt;
-                adjust = normalizeStep(adjust);
+                adjust = normalizeStep(adjust, activeStep);
             }
             else if (isSnapping)
             {
@@ -435,92 +418,24 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
             drawSlotWindow(g, columnXs[col], slotTopY, slotWidth, slotHeight, slotScale);
         }
 
-        final Shape oldClip = g.getClip();
         g.setClip(slotsLeftX, slotTopY, totalWidth, slotHeight);
 
-        if (!selectionMode) {
-            synchronized (columnHitboxes)
-            {
-                columnHitboxes.clear();
-            }
+        synchronized (columnHitboxes)
+        {
+            columnHitboxes.clear();
         }
 
-        if (selectionMode)
-        {
-            synchronized (columnHitboxes)
-            {
-                columnHitboxes.clear();
-                for (int col = 0; col < columnCount; col++)
-                {
-                    int slotX = columnXs[col] + iconPadX;
-                    int slotY = slotTopY + iconPadY;
-                    if (!selectionMode && iconFrameImage != null) {
-                        g.drawImage(iconFrameImage, slotX, slotY, iconSize, iconSize, null);
-                    }
-                    int optionId = col < currentOptions.size() ? currentOptions.get(col) : 0;
-                    if (optionId != 0)
-                    {
-                        BufferedImage optionImage = itemManager.getImage(optionId, 1, false);
-                        if (optionImage != null)
-                        {
-                            g.drawImage(optionImage,
-                                    slotX + innerBoxXInset,
-                                    slotY + innerBoxYInset,
-                                    innerBoxW,
-                                    innerBoxH,
-                                    null);
-                        }
-                    }
-                    columnHitboxes.add(new Rectangle(columnXs[col], slotTopY, slotWidth, slotHeight));
-                    drawItemLabel(
-                            g,
-                            columnXs[col],
-                            slotTopY,
-                            slotWidth,
-                            slotHeight,
-                            getItemNameSafe(optionId),
-                            true
-                    );
-                }
-            }
-
-            if (highlightPhase)
-            {
-                for (int col = 0; col < columnCount; col++)
-                {
-                    int optionId = col < currentOptions.size() ? currentOptions.get(col) : 0;
-                    if (optionId == 0)
-                    {
-                        continue;
-                    }
-                    int slotX = columnXs[col] + iconPadX;
-                    int slotY = slotTopY + iconPadY;
-                    drawHighlight(g, slotX, slotY, optionId, iconSize, true);
-                    drawItemLabel(
-                            g,
-                            columnXs[col],
-                            slotTopY,
-                            slotWidth,
-                            slotHeight,
-                            getItemNameSafe(optionId),
-                            true
-                    );
-                }
-            }
-        }
-        else
-        {
-            synchronized (rollingColumns) {
+        synchronized (rollingColumns) {
                 if (!highlightPhase && !isSnapping && (rollStartMs + rollDurationMs - nowMs) <= SNAP_DURATION_MS) {
                     isSnapping = true;
                     snapStartMs = nowMs;
 
-                    final float k = (float) Math.floor(rollOffset / STEP);
-                    snapBase = k * STEP;
+                    final float k = (float) Math.floor(rollOffset / activeStep);
+                    snapBase = k * activeStep;
                     snapResidualStart = rollOffset - snapBase;
-                    final boolean goNext = (snapResidualStart / STEP) >= SNAP_NEXT_THRESHOLD;
+                    final boolean goNext = (snapResidualStart / activeStep) >= SNAP_NEXT_THRESHOLD;
                     winnerDelta = goNext ? 1 : 0;
-                    snapTarget = goNext ? (snapBase + STEP) : snapBase;
+                    snapTarget = goNext ? (snapBase + activeStep) : snapBase;
                 }
 
                 if (!highlightPhase) {
@@ -531,8 +446,8 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                         final float end = snapTarget;
                         rollOffset = start + (end - start) * s;
 
-                        if (rollOffset >= STEP) {
-                            normalizeOnce();
+                        if (rollOffset >= activeStep) {
+                            normalizeOnce(activeStep);
                             winnerDelta = 0;
                             snapBase = 0f;
                             snapTarget = 0f;
@@ -540,14 +455,14 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                         }
                     } else {
                         rollOffset += currentSpeed * dt;
-                        while (rollOffset >= STEP) {
-                            normalizeOnce();
+                        while (rollOffset >= activeStep) {
+                            normalizeOnce(activeStep);
                         }
                     }
                 } else if (isSnapping) {
                     rollOffset = snapTarget;
-                    if (rollOffset >= STEP) {
-                        normalizeOnce();
+                    if (rollOffset >= activeStep) {
+                        normalizeOnce(activeStep);
                         winnerDelta = 0;
                     }
                 }
@@ -563,11 +478,11 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                         if (image == null) continue;
 
                         final float columnOffset = rollOffset + columnOffsetAdjust[col];
-                        final float drawYF = iconsTopYF + i * STEP - columnOffset;
+                        final float drawYF = iconsTopYF + i * activeStep - columnOffset;
                         final int drawY = Math.round(drawYF);
 
-                        if (!selectionMode && iconFrameImage != null) {
-                            g.drawImage(iconFrameImage, iconsX, drawY, ICON_W, ICON_H, null);
+                        if (iconFrameImage != null) {
+                            g.drawImage(iconFrameImage, iconsX, drawY, iconSize, iconSize, null);
                         }
 
                         final int x = iconsX + innerBoxXInset;
@@ -588,7 +503,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
 
                         final int centerItemId = column.get(winnerIndex);
                         final float columnOffset = rollOffset + columnOffsetAdjust[col];
-                        final float columnBaseF = iconsTopYF + centerIndex * STEP - columnOffset;
+                        final float columnBaseF = iconsTopYF + centerIndex * activeStep - columnOffset;
                         final int columnBaseY = Math.round(columnBaseF);
                         drawHighlight(g, columnXs[col] + iconPadX, columnBaseY, centerItemId, iconSize, false);
                         drawItemLabel(
@@ -600,23 +515,28 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                                 getItemNameSafe(centerItemId),
                                 false
                         );
+
+                        if (clickableSelection && col < currentOptions.size()) {
+                            Rectangle rect = new Rectangle(columnXs[col], slotTopY, slotWidth, slotHeight);
+                            synchronized (columnHitboxes) {
+                                columnHitboxes.add(rect);
+                            }
+                        }
                     }
                 }
-            }
         }
 
         g.setClip(oldClip);
         return null;
     }
 
-    private void normalizeOnce()
+    private void normalizeOnce(float step)
     {
-        if (rollOffset >= STEP) {
-            rollOffset -= STEP;
+        if (rollOffset >= step) {
+            rollOffset -= step;
             if (!rollingColumns.isEmpty()) {
-                for (List<Integer> column : rollingColumns)
-                {
-                    if (column.isEmpty()) {
+                for (List<Integer> column : rollingColumns) {
+                    if (column == null || column.isEmpty()) {
                         continue;
                     }
                     column.remove(0);
@@ -628,16 +548,16 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         }
     }
 
-    private float normalizeStep(float value)
+    private float normalizeStep(float value, float step)
     {
-        if (STEP == 0)
+        if (step == 0f)
         {
             return 0f;
         }
-        float adjusted = value % STEP;
+        float adjusted = value % step;
         if (adjusted < 0)
         {
-            adjusted += STEP;
+            adjusted += step;
         }
         return adjusted;
     }

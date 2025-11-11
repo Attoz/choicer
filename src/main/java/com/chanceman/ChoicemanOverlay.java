@@ -46,14 +46,14 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private static final int SPACING = 5;
 
     private static final int FRAME_CONTENT_INSET = 4;
-    private static final int SLOT_PADDING_X = 18;
-    private static final int SLOT_PADDING_Y = 12;
-    private static final int SELECTION_TOP_MARGIN = 45;
-    private static final float CHOICE_SLOT_SCALE = 1.85f;
-    private static final int MIN_CHOICE_SLOT_WIDTH = 180;
-    private static final int MIN_CHOICE_SLOT_HEIGHT = 120;
-    private static final int SCROLL_ICON_TARGET = 80;
-    private static final int SCROLL_ITEM_GAP = 12;
+    private static final int SLOT_PADDING_X = 10;
+    private static final int SLOT_PADDING_Y = 8;
+    private static final int SELECTION_TOP_MARGIN = 25;
+    private static final float CHOICE_SLOT_SCALE = 1.0f;
+    private static final int MIN_CHOICE_SLOT_WIDTH = 110;
+    private static final int MIN_CHOICE_SLOT_HEIGHT = 80;
+    private static final int SCROLL_ICON_TARGET = 48;
+    private static final int SCROLL_ITEM_GAP = 6;
     private static final float DEFAULT_STEP = SCROLL_ICON_TARGET + SCROLL_ITEM_GAP;
     private static final Color SLOT_BORDER = new Color(201, 168, 92, 230);
     private static final Color SLOT_FILL_TOP = new Color(22, 22, 22, 235);
@@ -63,7 +63,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
 
     private static final int ICON_COUNT = 3;
     private static final int DRAW_COUNT = ICON_COUNT + 1;
-    private static final int COLUMN_SPACING = 16;
+    private static final int COLUMN_SPACING = 8;
     private static final int VISIBLE_ROLLING_ITEM_COUNT = 3;
 
     private final Client client;
@@ -513,7 +513,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                                 slotWidth,
                                 slotHeight,
                                 getItemNameSafe(centerItemId),
-                                false
+                                true
                         );
 
                         if (clickableSelection && col < currentOptions.size()) {
@@ -610,40 +610,18 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         FontMetrics fm = g.getFontMetrics();
         int maxWidth = slotWidth - 14;
         int maxLines = allowWrap ? 2 : 1;
-        
-        List<String> lines = new ArrayList<>();
-        if (fm.stringWidth(text) <= maxWidth || !allowWrap) {
-            // If text fits in one line or wrapping is disabled, just add the whole text
-            lines.add(text);
-        } else {
-            // Try to wrap the text normally
-            String[] words = text.split("\\s+");
-            StringBuilder currentLine = new StringBuilder();
-            
-            for (String word : words) {
-                String testLine = currentLine.length() == 0 ? word : currentLine.toString() + " " + word;
-                if (fm.stringWidth(testLine) <= maxWidth) {
-                    currentLine = new StringBuilder(testLine);
-                } else {
-                    if (currentLine.length() > 0) {
-                        lines.add(currentLine.toString());
-                        currentLine = new StringBuilder(word);
-                        if (lines.size() >= maxLines) {
-                            break;
-                        }
-                    }
-                }
-            }
-            if (currentLine.length() > 0 && lines.size() < maxLines) {
-                lines.add(currentLine.toString());
-            }
+
+        List<String> lines = buildWrappedLines(text, fm, maxWidth, maxLines, allowWrap);
+        if (lines.isEmpty()) {
+            g.setFont(oldFont);
+            return;
         }
 
         int lineHeight = fm.getAscent();
         int totalHeight = lineHeight * lines.size();
         int startY = slotY + slotHeight - 8 - totalHeight + lineHeight;
         int currentY = startY;
-        
+
         for (String line : lines) {
             int textWidth = fm.stringWidth(line);
             int textX = slotX + (slotWidth - textWidth) / 2;
@@ -654,6 +632,95 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
             currentY += lineHeight;
         }
         g.setFont(oldFont);
+    }
+
+    private List<String> buildWrappedLines(String text, FontMetrics fm, int maxWidth, int maxLines, boolean allowWrap) {
+        List<String> lines = new ArrayList<>();
+        if (text == null) {
+            return lines;
+        }
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) {
+            return lines;
+        }
+        if (!allowWrap || maxLines <= 1) {
+            lines.add(truncateToWidth(trimmed, fm, maxWidth, false));
+            return lines;
+        }
+
+        int index = 0;
+        while (index < trimmed.length() && lines.size() < maxLines) {
+            int breakIdx = findBreakIndex(trimmed, index, fm, maxWidth);
+            if (breakIdx <= index) {
+                breakIdx = Math.min(trimmed.length(), index + 1);
+            }
+            String line = trimmed.substring(index, breakIdx).trim();
+            if (!line.isEmpty()) {
+                lines.add(line);
+            }
+            index = skipWhitespace(trimmed, breakIdx);
+        }
+
+        if (lines.isEmpty()) {
+            lines.add(truncateToWidth(trimmed, fm, maxWidth, false));
+        } else if (index < trimmed.length()) {
+            String last = lines.get(lines.size() - 1);
+            lines.set(lines.size() - 1, truncateToWidth(last, fm, maxWidth, true));
+        }
+        return lines;
+    }
+
+    private int findBreakIndex(String text, int start, FontMetrics fm, int maxWidth) {
+        int width = 0;
+        int lastWhitespace = -1;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            width += fm.charWidth(c);
+            if (Character.isWhitespace(c)) {
+                lastWhitespace = i;
+            }
+            if (width > maxWidth) {
+                return lastWhitespace >= start ? lastWhitespace : i;
+            }
+        }
+        return text.length();
+    }
+
+    private int skipWhitespace(String text, int index) {
+        int i = index;
+        while (i < text.length() && Character.isWhitespace(text.charAt(i))) {
+            i++;
+        }
+        return i;
+    }
+
+    private String truncateToWidth(String text, FontMetrics fm, int maxWidth, boolean appendEllipsis) {
+        if (text == null) {
+            return "";
+        }
+        if (fm.stringWidth(text) <= maxWidth) {
+            return text;
+        }
+        String ellipsis = appendEllipsis ? "…" : "";
+        int ellipsisWidth = appendEllipsis ? fm.stringWidth(ellipsis) : 0;
+        StringBuilder builder = new StringBuilder();
+        int currentWidth = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            int charWidth = fm.charWidth(c);
+            if (currentWidth + charWidth + ellipsisWidth > maxWidth) {
+                break;
+            }
+            builder.append(c);
+            currentWidth += charWidth;
+        }
+        if (appendEllipsis) {
+            if (builder.length() == 0) {
+                return "…";
+            }
+            builder.append('…');
+        }
+        return builder.toString();
     }
 
     // Old text wrapping and truncation methods have been removed
@@ -684,8 +751,8 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
 
     private void drawHighlight(Graphics2D g, int iconsX, int baseY, int itemId, int iconDimension, boolean emphasize)
     {
-        final float glowScale = emphasize ? 2.6f : 2.0f;
-        final float glowHeightScale = emphasize ? 2.8f : 2.2f;
+        final float glowScale = emphasize ? 1.8f : 1.4f;
+        final float glowHeightScale = emphasize ? 2.0f : 1.6f;
         final int glowW = (int) (iconDimension * glowScale);
         final int glowH = (int) (iconDimension * glowHeightScale);
         final float cx = iconsX + iconDimension / 2f;
@@ -706,7 +773,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         g.fill(new Ellipse2D.Float(cx - glowW / 2f, cy - glowH / 2f, glowW, glowH));
         g.setComposite(old);
 
-        final float centerScale = emphasize ? 1.6f : 1.15f;
+        final float centerScale = emphasize ? 1.25f : 1.05f;
         final int innerBoxXInset = FRAME_CONTENT_INSET;
         final int innerBoxYInset = FRAME_CONTENT_INSET;
         final int innerBoxW = iconDimension - innerBoxXInset * 2;

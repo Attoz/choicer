@@ -3,6 +3,7 @@ package com.chanceman;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
+import net.runelite.api.Point;
 import net.runelite.client.audio.AudioPlayer;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.Overlay;
@@ -58,7 +59,6 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private static final Color SLOT_BORDER = new Color(201, 168, 92, 230);
     private static final Color SLOT_FILL_TOP = new Color(22, 22, 22, 235);
     private static final Color SLOT_FILL_BOTTOM = new Color(10, 10, 10, 235);
-    private static final Color LABEL_COLOR = new Color(247, 247, 247);
     private static final Font LABEL_FONT = new Font("SansSerif", Font.BOLD, 11);
 
     private static final int ICON_COUNT = 3;
@@ -506,16 +506,6 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                         final float columnBaseF = iconsTopYF + centerIndex * activeStep - columnOffset;
                         final int columnBaseY = Math.round(columnBaseF);
                         drawHighlight(g, columnXs[col] + iconPadX, columnBaseY, centerItemId, iconSize, false);
-                        drawItemLabel(
-                                g,
-                                columnXs[col],
-                                slotTopY,
-                                slotWidth,
-                                slotHeight,
-                                getItemNameSafe(centerItemId),
-                                true
-                        );
-
                         if (clickableSelection && col < currentOptions.size()) {
                             final int iconX = columnXs[col] + iconPadX;
                             final int iconY = columnBaseY;
@@ -529,6 +519,23 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         }
 
         g.setClip(oldClip);
+
+        if (clickableSelection)
+        {
+            Point mouse = client.getMouseCanvasPosition();
+            if (mouse != null)
+            {
+                Integer hoveredItem = getOptionAt(mouse.getX(), mouse.getY());
+                if (hoveredItem != null)
+                {
+                    String hoverName = getItemNameSafe(hoveredItem);
+                    if (!hoverName.isEmpty())
+                    {
+                        drawHoverTooltip(g, hoverName, mouse, oldClip);
+                    }
+                }
+            }
+        }
         return null;
     }
 
@@ -601,129 +608,37 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         g.setStroke(oldStroke);
     }
 
-    private void drawItemLabel(Graphics2D g, int slotX, int slotY, int slotWidth, int slotHeight, String text, boolean allowWrap) {
-        if (text == null || text.isEmpty()) {
+    private void drawHoverTooltip(Graphics2D g, String text, Point mouse, Shape clipShape)
+    {
+        if (text == null || text.isEmpty())
+        {
             return;
         }
         Font oldFont = g.getFont();
         g.setFont(LABEL_FONT);
         FontMetrics fm = g.getFontMetrics();
-        int maxWidth = slotWidth - 14;
-        int maxLines = allowWrap ? 2 : 1;
+        int padding = 6;
+        int width = fm.stringWidth(text) + padding * 2;
+        int height = fm.getHeight() + padding * 2;
 
-        List<String> lines = buildWrappedLines(text, fm, maxWidth, maxLines, allowWrap);
-        if (lines.isEmpty()) {
-            g.setFont(oldFont);
-            return;
-        }
+        Rectangle clipBounds = clipShape != null ? clipShape.getBounds()
+                : new Rectangle(0, 0, client.getCanvasWidth(), client.getCanvasHeight());
 
-        int lineHeight = fm.getAscent();
-        int totalHeight = lineHeight * lines.size();
-        int startY = slotY + slotHeight - 8 - totalHeight + lineHeight;
-        int currentY = startY;
+        int x = mouse.getX() + 12;
+        int y = mouse.getY() - 12;
+        x = Math.max(clipBounds.x, Math.min(x, clipBounds.x + clipBounds.width - width));
+        y = Math.max(clipBounds.y + height, Math.min(y, clipBounds.y + clipBounds.height));
+        int top = y - height;
 
-        for (String line : lines) {
-            int textWidth = fm.stringWidth(line);
-            int textX = slotX + (slotWidth - textWidth) / 2;
-            g.setColor(Color.BLACK);
-            g.drawString(line, textX + 1, currentY + 1);
-            g.setColor(LABEL_COLOR);
-            g.drawString(line, textX, currentY);
-            currentY += lineHeight;
-        }
+        g.setColor(new Color(0, 0, 0, 190));
+        g.fillRoundRect(x, top, width, height, 8, 8);
+        g.setColor(new Color(200, 200, 200, 220));
+        g.drawRoundRect(x, top, width, height, 8, 8);
+
+        g.setColor(Color.WHITE);
+        g.drawString(text, x + padding, top + padding + fm.getAscent());
         g.setFont(oldFont);
     }
-
-    private List<String> buildWrappedLines(String text, FontMetrics fm, int maxWidth, int maxLines, boolean allowWrap) {
-        List<String> lines = new ArrayList<>();
-        if (text == null) {
-            return lines;
-        }
-        String trimmed = text.trim();
-        if (trimmed.isEmpty()) {
-            return lines;
-        }
-        if (!allowWrap || maxLines <= 1) {
-            lines.add(truncateToWidth(trimmed, fm, maxWidth, false));
-            return lines;
-        }
-
-        int index = 0;
-        while (index < trimmed.length() && lines.size() < maxLines) {
-            int breakIdx = findBreakIndex(trimmed, index, fm, maxWidth);
-            if (breakIdx <= index) {
-                breakIdx = Math.min(trimmed.length(), index + 1);
-            }
-            String line = trimmed.substring(index, breakIdx).trim();
-            if (!line.isEmpty()) {
-                lines.add(line);
-            }
-            index = skipWhitespace(trimmed, breakIdx);
-        }
-
-        if (lines.isEmpty()) {
-            lines.add(truncateToWidth(trimmed, fm, maxWidth, false));
-        } else if (index < trimmed.length()) {
-            String last = lines.get(lines.size() - 1);
-            lines.set(lines.size() - 1, truncateToWidth(last, fm, maxWidth, true));
-        }
-        return lines;
-    }
-
-    private int findBreakIndex(String text, int start, FontMetrics fm, int maxWidth) {
-        int width = 0;
-        int lastWhitespace = -1;
-        for (int i = start; i < text.length(); i++) {
-            char c = text.charAt(i);
-            width += fm.charWidth(c);
-            if (Character.isWhitespace(c)) {
-                lastWhitespace = i;
-            }
-            if (width > maxWidth) {
-                return lastWhitespace >= start ? lastWhitespace : i;
-            }
-        }
-        return text.length();
-    }
-
-    private int skipWhitespace(String text, int index) {
-        int i = index;
-        while (i < text.length() && Character.isWhitespace(text.charAt(i))) {
-            i++;
-        }
-        return i;
-    }
-
-    private String truncateToWidth(String text, FontMetrics fm, int maxWidth, boolean appendEllipsis) {
-        if (text == null) {
-            return "";
-        }
-        if (fm.stringWidth(text) <= maxWidth) {
-            return text;
-        }
-        String ellipsis = appendEllipsis ? "…" : "";
-        int ellipsisWidth = appendEllipsis ? fm.stringWidth(ellipsis) : 0;
-        StringBuilder builder = new StringBuilder();
-        int currentWidth = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            int charWidth = fm.charWidth(c);
-            if (currentWidth + charWidth + ellipsisWidth > maxWidth) {
-                break;
-            }
-            builder.append(c);
-            currentWidth += charWidth;
-        }
-        if (appendEllipsis) {
-            if (builder.length() == 0) {
-                return "…";
-            }
-            builder.append('…');
-        }
-        return builder.toString();
-    }
-
-    // Old text wrapping and truncation methods have been removed
 
     private String getItemNameSafe(int itemId)
     {

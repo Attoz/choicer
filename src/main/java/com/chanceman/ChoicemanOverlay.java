@@ -23,8 +23,10 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -46,10 +48,10 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private static final int ICON_H = 32;
     private static final int SPACING = 5;
 
-    private static final int FRAME_CONTENT_INSET = 4;
+    private static final int FRAME_CONTENT_INSET = 2;
     private static final int SLOT_PADDING_X = 10;
     private static final int SLOT_PADDING_Y = 8;
-    private static final int SELECTION_TOP_MARGIN = 25;
+    private static final int SELECTION_TOP_MARGIN = 15;
     private static final float CHOICE_SLOT_SCALE = 1.0f;
     private static final int MIN_CHOICE_SLOT_WIDTH = 110;
     private static final int MIN_CHOICE_SLOT_HEIGHT = 80;
@@ -77,6 +79,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private static final int VISIBLE_ROLLING_ITEM_COUNT = 3;
     private static final int CHOICE_BUTTON_CORNER_RADIUS = 12;
     private static final int CHOICE_BUTTON_INSET = 6;
+    private static final int CHOICE_BUTTON_VERTICAL_OFFSET = 10;
     private static final Color CHOICE_BUTTON_FILL_TOP = new Color(28, 28, 28, 235);
     private static final Color CHOICE_BUTTON_FILL_BOTTOM = new Color(10, 10, 10, 235);
     private static final Color CHOICE_BUTTON_BORDER = SLOT_BORDER;
@@ -91,6 +94,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private final float[] columnOffsetAdjust = new float[5];
     private final float[] columnSpeedScale = new float[5];
     private final Random spinRandom = new Random();
+    private final Set<Integer> uniqueRollItems = Collections.synchronizedSet(new HashSet<>());
 
     @Inject private AudioPlayer audioPlayer;
     @Inject private ChanceManConfig config;
@@ -279,6 +283,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         this.snapResidualStart = 0f;
         this.snapTarget = 0f;
         this.winnerDelta = 0;
+        uniqueRollItems.clear();
 
         synchronized (rollingColumns) {
             rollingColumns.clear();
@@ -286,7 +291,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
             {
                 List<Integer> column = new ArrayList<>();
                 for (int i = 0; i < DRAW_COUNT; i++) {
-                    column.add(randomLockedItemSupplier.get());
+                    column.add(nextUniqueRollItem());
                 }
                 rollingColumns.add(column);
             }
@@ -545,7 +550,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         }
         else
         {
-            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX, iconsTopYF, activeStep, centerIndex);
+            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX);
         }
 
         g.setClip(oldClip);
@@ -576,10 +581,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
             int slotWidth,
             int slotHeight,
             int iconSize,
-            int iconPadX,
-            float iconsTopYF,
-            float activeStep,
-            int centerIndex)
+            int iconPadX)
     {
         List<Integer> optionsSnapshot = currentOptions == null
                 ? Collections.emptyList()
@@ -600,13 +602,11 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         final int insetX = CHOICE_BUTTON_INSET;
         final int insetY = CHOICE_BUTTON_INSET;
         final int slotBottom = topY + slotHeight - insetY;
-        final int iconPaddingTop = 10;
-        final int iconPaddingBottom = 10;
+        final int iconPaddingTop = 14;
+        final int iconPaddingBottom = 14;
+        final int iconY = topY + (slotHeight - iconSize) / 2 - CHOICE_BUTTON_VERTICAL_OFFSET;
         for (int i = 0; i < drawCount; i++)
         {
-            final float columnOffset = rollOffset + columnOffsetAdjust[i];
-            final float columnBaseF = iconsTopYF + centerIndex * activeStep - columnOffset;
-            final int iconY = Math.round(columnBaseF);
             final int iconX = columnXs[i] + iconPadX;
             Rectangle iconRect = new Rectangle(iconX, iconY, iconSize, iconSize);
             iconRects.add(iconRect);
@@ -798,11 +798,43 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                     }
                     column.remove(0);
                     if (randomLockedItemSupplier != null) {
-                        column.add(randomLockedItemSupplier.get());
+                        column.add(nextUniqueRollItem());
                     }
                 }
             }
         }
+    }
+
+    private int nextUniqueRollItem()
+    {
+        if (randomLockedItemSupplier == null)
+        {
+            return 0;
+        }
+
+        final int maxAttempts = Math.max(10, columnCount * DRAW_COUNT);
+        int fallback = 0;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            Integer rolled = randomLockedItemSupplier.get();
+            int candidate = rolled != null ? rolled : 0;
+            fallback = candidate;
+            if (candidate == 0)
+            {
+                break;
+            }
+            if (uniqueRollItems.add(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        if (fallback != 0)
+        {
+            uniqueRollItems.add(fallback);
+        }
+        return fallback;
     }
 
     private float normalizeStep(float value, float step)

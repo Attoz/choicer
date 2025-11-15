@@ -386,10 +386,32 @@ public class RollAnimationManager
         CompletableFuture<Integer> future = new CompletableFuture<>();
         MouseAdapter listener = new MouseAdapter()
         {
+            private Integer blockIfOverButton(MouseEvent e)
+            {
+                Integer hit = choicemanOverlay.getOptionAt(e.getX(), e.getY());
+                if (hit != null)
+                {
+                    e.consume();
+                }
+                return hit;
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e)
+            {
+                blockIfOverButton(e);
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e)
+            {
+                blockIfOverButton(e);
+            }
+
             @Override
             public void mouseReleased(MouseEvent e)
             {
-                Integer hit = choicemanOverlay.getOptionAt(e.getX(), e.getY());
+                Integer hit = blockIfOverButton(e);
                 if (hit != null)
                 {
                     future.complete(hit);

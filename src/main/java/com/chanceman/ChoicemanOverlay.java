@@ -53,7 +53,9 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private static final float CHOICE_SLOT_SCALE = 1.0f;
     private static final int MIN_CHOICE_SLOT_WIDTH = 110;
     private static final int MIN_CHOICE_SLOT_HEIGHT = 80;
+    private static final int MIN_SCROLL_SLOT_WIDTH = 90;
     private static final int SCROLL_ICON_TARGET = 48;
+    private static final int SCROLL_ICON_TARGET_COMPACT = 36;
     private static final int SCROLL_ITEM_GAP = 6;
     private static final float DEFAULT_STEP = SCROLL_ICON_TARGET + SCROLL_ITEM_GAP;
     private static final Color SLOT_BORDER = new Color(201, 168, 92, 230);
@@ -71,6 +73,15 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     private static final int DRAW_COUNT = ICON_COUNT + 1;
     private static final int COLUMN_SPACING = 8;
     private static final int VISIBLE_ROLLING_ITEM_COUNT = 3;
+    private static final int CHOICE_BUTTON_CORNER_RADIUS = 12;
+    private static final int CHOICE_BUTTON_INSET = 6;
+    private static final Color CHOICE_BUTTON_FILL_TOP = new Color(28, 28, 28, 235);
+    private static final Color CHOICE_BUTTON_FILL_BOTTOM = new Color(10, 10, 10, 235);
+    private static final Color CHOICE_BUTTON_BORDER = SLOT_BORDER;
+    private static final Color CHOICE_BUTTON_BORDER_HOVER = new Color(255, 220, 140, 245);
+    private static final Color CHOICE_BUTTON_BORDER_INNER = new Color(30, 30, 30, 210);
+    private static final Color CHOICE_BUTTON_SHADOW = new Color(0, 0, 0, 90);
+    private static final Color CHOICE_BUTTON_HIGHLIGHT = new Color(255, 255, 255, 140);
 
     private final Client client;
     private final ItemManager itemManager;
@@ -358,11 +369,13 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         final int baseSlotWidth = ICON_W + SLOT_PADDING_X * 2;
         final int baseSlotHeight = ICON_H + SLOT_PADDING_Y * 2;
         final int rollingVisibleItems = Math.max(2, VISIBLE_ROLLING_ITEM_COUNT);
-        final int rollingContentSpan = (int)(
-                SCROLL_ICON_TARGET * rollingVisibleItems
+        final float iconTargetSize = clickableSelection ? SCROLL_ICON_TARGET : SCROLL_ICON_TARGET_COMPACT;
+        final int rollingContentSpan = Math.round(
+                iconTargetSize * rollingVisibleItems
                         + SCROLL_ITEM_GAP * (rollingVisibleItems - 1)
         );
-        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), MIN_CHOICE_SLOT_WIDTH);
+        final int minSlotWidth = clickableSelection ? MIN_CHOICE_SLOT_WIDTH : MIN_SCROLL_SLOT_WIDTH;
+        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), minSlotWidth);
         final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), MIN_CHOICE_SLOT_HEIGHT);
         final int slotHeight = Math.max(scaledSlotHeight, rollingContentSpan + SLOT_PADDING_Y * 2);
         final int spacing = Math.max(14, Math.round(COLUMN_SPACING * slotScale));
@@ -387,51 +400,56 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         {
             columnXs[col] = slotsLeftX + col * (slotWidth + spacing);
         }
-        for (int col = 0; col < columnCount; col++)
-        {
-            float adjust = columnOffsetAdjust[col];
-            if (!highlightPhase && !isSnapping)
-            {
-                adjust += (columnSpeedScale[col] - 1f) * currentSpeed * dt;
-                adjust = normalizeStep(adjust, activeStep);
-            }
-            else if (isSnapping)
-            {
-                adjust *= 0.82f;
-                if (Math.abs(adjust) < 0.01f)
-                {
-                    adjust = 0f;
-                }
-            }
-            else if (highlightPhase)
-            {
-                adjust *= 0.9f;
-                if (Math.abs(adjust) < 0.01f)
-                {
-                    adjust = 0f;
-                }
-            }
-            columnOffsetAdjust[col] = adjust;
-        }
+
         final int centerIndex = ICON_COUNT / 2;
         final int innerBoxXInset = FRAME_CONTENT_INSET;
         final int innerBoxYInset = FRAME_CONTENT_INSET;
         final int innerBoxW = iconSize - innerBoxXInset * 2;
         final int innerBoxH = iconSize - innerBoxYInset * 2;
 
-        for (int col = 0; col < columnCount; col++)
+        if (!clickableSelection)
         {
-            drawSlotWindow(g, columnXs[col], slotTopY, slotWidth, slotHeight, slotScale);
-        }
+            for (int col = 0; col < columnCount; col++)
+            {
+                drawSlotWindow(g, columnXs[col], slotTopY, slotWidth, slotHeight, slotScale);
+            }
 
-        g.setClip(slotsLeftX, slotTopY, totalWidth, slotHeight);
+            for (int col = 0; col < columnCount; col++)
+            {
+                float adjust = columnOffsetAdjust[col];
+                if (!highlightPhase && !isSnapping)
+                {
+                    adjust += (columnSpeedScale[col] - 1f) * currentSpeed * dt;
+                    adjust = normalizeStep(adjust, activeStep);
+                }
+                else if (isSnapping)
+                {
+                    adjust *= 0.82f;
+                    if (Math.abs(adjust) < 0.01f)
+                    {
+                        adjust = 0f;
+                    }
+                }
+                else if (highlightPhase)
+                {
+                    adjust *= 0.9f;
+                    if (Math.abs(adjust) < 0.01f)
+                    {
+                        adjust = 0f;
+                    }
+                }
+                columnOffsetAdjust[col] = adjust;
+            }
 
-        synchronized (columnHitboxes)
-        {
-            columnHitboxes.clear();
-        }
+            g.setClip(slotsLeftX, slotTopY, totalWidth, slotHeight);
 
-        synchronized (rollingColumns) {
+            synchronized (columnHitboxes)
+            {
+                columnHitboxes.clear();
+            }
+
+            synchronized (rollingColumns)
+            {
                 if (!highlightPhase && !isSnapping && (rollStartMs + rollDurationMs - nowMs) <= SNAP_DURATION_MS) {
                     isSnapping = true;
                     snapStartMs = nowMs;
@@ -522,6 +540,11 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
                         }
                     }
                 }
+            }
+        }
+        else
+        {
+            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX, iconsTopYF, activeStep, centerIndex);
         }
 
         g.setClip(oldClip);
@@ -543,6 +566,283 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
             }
         }
         return null;
+    }
+
+    private void renderSelectionButtons(
+            Graphics2D g,
+            int[] columnXs,
+            int topY,
+            int slotWidth,
+            int slotHeight,
+            int iconSize,
+            int iconPadX,
+            float iconsTopYF,
+            float activeStep,
+            int centerIndex)
+    {
+        List<Integer> optionsSnapshot = currentOptions == null
+                ? Collections.emptyList()
+                : new ArrayList<>(currentOptions);
+        final int availableSlots = columnXs == null ? 0 : columnXs.length;
+        final int drawCount = Math.min(optionsSnapshot.size(), availableSlots);
+        if (drawCount <= 0)
+        {
+            synchronized (columnHitboxes)
+            {
+                columnHitboxes.clear();
+            }
+            return;
+        }
+
+        List<Rectangle> buttonRects = new ArrayList<>(drawCount);
+        List<Rectangle> iconRects = new ArrayList<>(drawCount);
+        final int insetX = CHOICE_BUTTON_INSET;
+        final int insetY = CHOICE_BUTTON_INSET;
+        final int slotBottom = topY + slotHeight - insetY;
+        final int iconPaddingTop = 10;
+        final int iconPaddingBottom = 10;
+        for (int i = 0; i < drawCount; i++)
+        {
+            final float columnOffset = rollOffset + columnOffsetAdjust[i];
+            final float columnBaseF = iconsTopYF + centerIndex * activeStep - columnOffset;
+            final int iconY = Math.round(columnBaseF);
+            final int iconX = columnXs[i] + iconPadX;
+            Rectangle iconRect = new Rectangle(iconX, iconY, iconSize, iconSize);
+            iconRects.add(iconRect);
+
+            final int buttonTop = Math.max(topY + insetY, iconY - iconPaddingTop);
+            final int buttonBottom = Math.min(slotBottom, iconY + iconSize + iconPaddingBottom);
+            Rectangle rect = new Rectangle(
+                    columnXs[i] + insetX,
+                    buttonTop,
+                    Math.max(1, slotWidth - insetX * 2),
+                    Math.max(1, buttonBottom - buttonTop)
+            );
+            buttonRects.add(rect);
+        }
+
+        Point mouse = client.getMouseCanvasPosition();
+        int hoveredIndex = -1;
+        if (mouse != null)
+        {
+            for (int i = 0; i < buttonRects.size(); i++)
+            {
+                if (buttonRects.get(i).contains(mouse.getX(), mouse.getY()))
+                {
+                    hoveredIndex = i;
+                    break;
+                }
+            }
+        }
+
+        synchronized (columnHitboxes)
+        {
+            columnHitboxes.clear();
+            columnHitboxes.addAll(buttonRects);
+        }
+
+        for (int i = 0; i < drawCount; i++)
+        {
+            boolean hovered = (i == hoveredIndex);
+            drawChoiceButton(g, buttonRects.get(i), iconRects.get(i), optionsSnapshot.get(i), hovered);
+        }
+    }
+
+    private void drawChoiceButton(
+            Graphics2D g,
+            Rectangle rect,
+            Rectangle iconRect,
+            int itemId,
+            boolean hovered)
+    {
+        Paint previousPaint = g.getPaint();
+        Stroke previousStroke = g.getStroke();
+        Composite previousComposite = g.getComposite();
+
+        final float cornerRadius = CHOICE_BUTTON_CORNER_RADIUS;
+        RoundRectangle2D.Float buttonShape = new RoundRectangle2D.Float(
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                cornerRadius,
+                cornerRadius
+        );
+
+        RoundRectangle2D.Float shadowShape = new RoundRectangle2D.Float(
+                rect.x + 1,
+                rect.y + 3,
+                rect.width,
+                rect.height,
+                cornerRadius + 4,
+                cornerRadius + 4
+        );
+        g.setColor(CHOICE_BUTTON_SHADOW);
+        g.fill(shadowShape);
+
+        Color top = hovered
+                ? blendColors(CHOICE_BUTTON_FILL_TOP, Color.WHITE, 0.15f)
+                : CHOICE_BUTTON_FILL_TOP;
+        Color bottom = hovered
+                ? blendColors(CHOICE_BUTTON_FILL_BOTTOM, Color.WHITE, 0.12f)
+                : CHOICE_BUTTON_FILL_BOTTOM;
+        GradientPaint paint = new GradientPaint(
+                rect.x,
+                rect.y,
+                top,
+                rect.x,
+                rect.y + rect.height,
+                bottom
+        );
+        g.setPaint(paint);
+        g.fill(buttonShape);
+
+        // glossy highlight on upper half for some depth
+        GradientPaint highlightPaint = new GradientPaint(
+                rect.x,
+                rect.y,
+                CHOICE_BUTTON_HIGHLIGHT,
+                rect.x,
+                rect.y + rect.height / 2f,
+                new Color(
+                        CHOICE_BUTTON_HIGHLIGHT.getRed(),
+                        CHOICE_BUTTON_HIGHLIGHT.getGreen(),
+                        CHOICE_BUTTON_HIGHLIGHT.getBlue(),
+                        0
+                )
+        );
+        RoundRectangle2D.Float highlightShape = new RoundRectangle2D.Float(
+                rect.x + 3,
+                rect.y + 3,
+                rect.width - 6,
+                Math.max(4f, rect.height / 2f),
+                Math.max(4f, cornerRadius - 4f),
+                Math.max(4f, cornerRadius - 4f)
+        );
+        g.setComposite(AlphaComposite.SrcOver.derive(0.45f));
+        g.setPaint(highlightPaint);
+        g.fill(highlightShape);
+
+        g.setComposite(previousComposite);
+        g.setPaint(previousPaint);
+
+        g.setColor(hovered ? CHOICE_BUTTON_BORDER_HOVER : CHOICE_BUTTON_BORDER);
+        g.setStroke(new BasicStroke(hovered ? 3f : 2f));
+        g.draw(buttonShape);
+
+        RoundRectangle2D.Float innerBorder = new RoundRectangle2D.Float(
+                rect.x + 2,
+                rect.y + 2,
+                rect.width - 4,
+                rect.height - 4,
+                Math.max(4f, cornerRadius - 4f),
+                Math.max(4f, cornerRadius - 4f)
+        );
+        g.setColor(CHOICE_BUTTON_BORDER_INNER);
+        g.setStroke(new BasicStroke(1.4f));
+        g.draw(innerBorder);
+
+        g.setPaint(previousPaint);
+        g.setStroke(previousStroke);
+        g.setComposite(previousComposite);
+
+        drawIconGlow(g, iconRect, itemId, hovered);
+
+        final int iconSize = iconRect.width;
+        final int iconX = iconRect.x;
+        final int iconY = iconRect.y;
+        BufferedImage icon = itemManager.getImage(itemId, 1, false);
+        if (icon != null)
+        {
+            g.drawImage(icon, iconX, iconY, iconSize, iconSize, null);
+        }
+
+        applyIconSheen(g, iconRect, hovered);
+
+    }
+
+    private Color blendColors(Color base, Color accent, float mix)
+    {
+        mix = Math.max(0f, Math.min(1f, mix));
+        final float inv = 1f - mix;
+        int r = Math.round(base.getRed() * inv + accent.getRed() * mix);
+        int g = Math.round(base.getGreen() * inv + accent.getGreen() * mix);
+        int b = Math.round(base.getBlue() * inv + accent.getBlue() * mix);
+        int a = Math.round(base.getAlpha() * inv + accent.getAlpha() * mix);
+        r = Math.min(255, Math.max(0, r));
+        g = Math.min(255, Math.max(0, g));
+        b = Math.min(255, Math.max(0, b));
+        a = Math.min(255, Math.max(0, a));
+        return new Color(r, g, b, a);
+    }
+
+    private void drawIconGlow(Graphics2D g, Rectangle iconRect, int itemId, boolean hovered)
+    {
+        Color[] palette = getHighlightPalette(itemId);
+        final float cx = iconRect.x + iconRect.width / 2f;
+        final float cy = iconRect.y + iconRect.height / 2f;
+        final float radius = Math.max(iconRect.width, iconRect.height) * (hovered ? 0.95f : 0.82f);
+        final Color centerColor = blendColors(
+                new Color(30, 30, 30, hovered ? 230 : 210),
+                palette[0],
+                hovered ? 0.6f : 0.45f
+        );
+        final Color midColor = new Color(
+                palette[0].getRed(),
+                palette[0].getGreen(),
+                palette[0].getBlue(),
+                hovered ? 150 : 120
+        );
+        final Color edgeColor = new Color(
+                palette[1].getRed(),
+                palette[1].getGreen(),
+                palette[1].getBlue(),
+                0
+        );
+        final RadialGradientPaint glow = new RadialGradientPaint(
+                new Point2D.Float(cx, cy),
+                radius,
+                new float[]{0f, 0.7f, 1f},
+                new Color[]{centerColor, midColor, edgeColor}
+        );
+        Composite oldComposite = g.getComposite();
+        g.setComposite(AlphaComposite.SrcOver.derive(0.9f));
+        g.setPaint(glow);
+        g.fill(new Ellipse2D.Float(
+                cx - radius,
+                cy - radius,
+                radius * 2f,
+                radius * 2f
+        ));
+        g.setComposite(oldComposite);
+    }
+
+    private void applyIconSheen(Graphics2D g, Rectangle iconRect, boolean hovered)
+    {
+        final float cx = iconRect.x + iconRect.width / 2f;
+        final float cy = iconRect.y + iconRect.height * 0.2f;
+        final float width = iconRect.width * 1.3f;
+        final float height = iconRect.height * 0.9f;
+        RadialGradientPaint sheen = new RadialGradientPaint(
+                new Point2D.Float(cx, cy),
+                Math.max(width, height) * 0.5f,
+                new float[]{0f, 0.85f, 1f},
+                new Color[]{
+                        new Color(255, 255, 255, hovered ? 170 : 130),
+                        new Color(255, 255, 255, hovered ? 40 : 25),
+                        new Color(255, 255, 255, 0)
+                }
+        );
+        Composite oldComposite = g.getComposite();
+        g.setComposite(AlphaComposite.SrcOver.derive(0.6f));
+        g.setPaint(sheen);
+        g.fill(new Ellipse2D.Float(
+                cx - width / 2f,
+                cy - height / 2f,
+                width,
+                height
+        ));
+        g.setComposite(oldComposite);
     }
 
     private void normalizeOnce(float step)

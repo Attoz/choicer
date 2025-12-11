@@ -179,21 +179,44 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
 
     public Integer getOptionAt(int x, int y)
     {
+        // Get the overlay's bounds
+        Rectangle bounds = getBounds();
+        if (bounds == null) {
+            return null;
+        }
+
+        // Convert to overlay-relative coordinates
+        int relativeX = x - bounds.x;
+        int relativeY = y - bounds.y;
+
         synchronized (columnHitboxes)
         {
             for (int i = 0; i < columnHitboxes.size(); i++)
             {
                 Rectangle rect = columnHitboxes.get(i);
-                if (rect.contains(x, y))
+                if (rect.contains(relativeX, relativeY) && i < currentOptions.size())
                 {
-                    if (i < currentOptions.size())
-                    {
-                        return currentOptions.get(i);
-                    }
+                    return currentOptions.get(i);
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Exposes the current hitboxes for tests without leaking the internal list.
+     */
+    List<Rectangle> getCurrentHitboxes()
+    {
+        synchronized (columnHitboxes)
+        {
+            List<Rectangle> copy = new ArrayList<>(columnHitboxes.size());
+            for (Rectangle rect : columnHitboxes)
+            {
+                copy.add(new Rectangle(rect));
+            }
+            return copy;
+        }
     }
 
     private void syncSelectionOptionsWithColumns()
@@ -237,6 +260,15 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         }
         return snapped;
     }
+
+    /**
+     * Allows tests (or other non-DI contexts) to provide a config instance.
+     */
+    public void setConfig(ChanceManConfig config)
+    {
+        this.config = config;
+    }
+
     @Inject
     public ChoicemanOverlay(Client client, ItemManager itemManager)
     {
@@ -599,6 +631,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         }
 
         List<Rectangle> buttonRects = new ArrayList<>(drawCount);
+        List<Rectangle> hitboxRects = new ArrayList<>(drawCount);
         List<Rectangle> iconRects = new ArrayList<>(drawCount);
         final int insetX = CHOICE_BUTTON_INSET;
         final int insetY = CHOICE_BUTTON_INSET;
@@ -614,13 +647,25 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
 
             final int buttonTop = Math.max(topY + insetY, iconY - iconPaddingTop);
             final int buttonBottom = Math.min(slotBottom, iconY + iconSize + iconPaddingBottom);
-            Rectangle rect = new Rectangle(
-                    columnXs[i] + insetX,
-                    buttonTop,
-                    Math.max(1, slotWidth - insetX * 2),
-                    Math.max(1, buttonBottom - buttonTop)
-            );
-            buttonRects.add(rect);
+            int x = columnXs[i] + insetX;
+            int y = buttonTop;
+            int width = Math.max(1, slotWidth - insetX * 2);
+            int height = Math.max(1, buttonBottom - buttonTop);
+
+            Rectangle drawRect = new Rectangle(x, y, width, height);
+            buttonRects.add(drawRect);
+
+            Rectangle bounds = getBounds();
+            if (bounds != null)
+            {
+                Rectangle hitbox = new Rectangle(drawRect);
+                hitbox.translate(-bounds.x, -bounds.y);
+                hitboxRects.add(hitbox);
+            }
+            else
+            {
+                hitboxRects.add(new Rectangle(drawRect));
+            }
         }
 
         Point mouse = client.getMouseCanvasPosition();
@@ -629,7 +674,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         {
             for (int i = 0; i < buttonRects.size(); i++)
             {
-                if (buttonRects.get(i).contains(mouse.getX(), mouse.getY()))
+                if (buttonRects.get(i).contains(mouse))
                 {
                     hoveredIndex = i;
                     break;
@@ -640,7 +685,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         synchronized (columnHitboxes)
         {
             columnHitboxes.clear();
-            columnHitboxes.addAll(buttonRects);
+            columnHitboxes.addAll(hitboxRects);
         }
 
         for (int i = 0; i < drawCount; i++)

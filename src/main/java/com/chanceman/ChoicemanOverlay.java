@@ -674,7 +674,7 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
         {
             for (int i = 0; i < buttonRects.size(); i++)
             {
-                if (buttonRects.get(i).contains(mouse))
+                if (buttonRects.get(i).contains(new java.awt.Point(mouse.getX(), mouse.getY())))
                 {
                     hoveredIndex = i;
                     break;

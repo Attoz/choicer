@@ -421,7 +421,8 @@ public class RollAnimationManager
                 return e;
             }
         };
-        mouseManager.registerMouseListener(0, listener);
+        // Register after any coordinate translators (eg. Stretched Mode) so click coords line up with overlays.
+        mouseManager.registerMouseListener(listener);
         try
         {
             Integer result = future.get();

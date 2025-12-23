@@ -12,13 +12,13 @@ import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.input.MouseAdapter;
+import net.runelite.client.input.MouseManager;
 import net.runelite.client.util.ColorUtil;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.SwingUtilities;
-import java.awt.Canvas;
-import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -41,6 +41,7 @@ public class RollAnimationManager
     @Inject private ChanceManOverlay chanceManOverlay;
     @Inject private ChoicemanOverlay choicemanOverlay;
     @Inject private ChanceManConfig config;
+    @Inject private MouseManager mouseManager;
     @Setter private ChanceManPanel chanceManPanel;
 
     private HashSet<Integer> allTradeableItems;
@@ -378,8 +379,7 @@ public class RollAnimationManager
         {
             return fallbackItemId;
         }
-        Canvas canvas = client.getCanvas();
-        if (canvas == null)
+        if (client.getCanvas() == null)
         {
             return options.get(0);
         }
@@ -397,28 +397,31 @@ public class RollAnimationManager
             }
 
             @Override
-            public void mousePressed(MouseEvent e)
+            public MouseEvent mousePressed(MouseEvent e)
             {
                 blockIfOverButton(e);
+                return e;
             }
 
             @Override
-            public void mouseClicked(MouseEvent e)
+            public MouseEvent mouseClicked(MouseEvent e)
             {
                 blockIfOverButton(e);
+                return e;
             }
 
             @Override
-            public void mouseReleased(MouseEvent e)
+            public MouseEvent mouseReleased(MouseEvent e)
             {
                 Integer hit = blockIfOverButton(e);
                 if (hit != null)
                 {
                     future.complete(hit);
                 }
+                return e;
             }
         };
-        canvas.addMouseListener(listener);
+        mouseManager.registerMouseListener(0, listener);
         try
         {
             Integer result = future.get();
@@ -435,7 +438,7 @@ public class RollAnimationManager
         }
         finally
         {
-            canvas.removeMouseListener(listener);
+            mouseManager.unregisterMouseListener(listener);
         }
     }
 }

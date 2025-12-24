@@ -155,6 +155,7 @@ public class RollAnimationManager
             finally
             {
                 choicemanOverlay.setSelectionPending(false);
+                choicemanOverlay.stopAnimation();
             }
         }
         else

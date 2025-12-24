@@ -12,4 +12,11 @@ public interface RollOverlay
     int getFinalItem();
 
     int getHighlightDurationMs();
+
+    /**
+     * Optional hook for overlays to stop rendering immediately (no-op by default).
+     */
+    default void stopAnimation()
+    {
+    }
 }

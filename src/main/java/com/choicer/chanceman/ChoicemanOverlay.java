@@ -359,6 +359,12 @@ public class ChoicemanOverlay extends Overlay implements RollOverlay
     }
 
     @Override
+    public void stopAnimation()
+    {
+        isAnimating = false;
+    }
+
+    @Override
     public Dimension render(Graphics2D g)
     {
         if (!isAnimating && !selectionPending) {

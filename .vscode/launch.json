@@ -4,7 +4,13 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-
+        {
+            "type": "java",
+            "name": "ChanceManPluginTest",
+            "request": "launch",
+            "mainClass": "com.choicer.chanceman.ChanceManPluginTest",
+            "projectName": "chance-man-1"
+        },
         {
             "type": "java",
             "name": "Current File",
@@ -15,7 +21,7 @@
             "type": "java",
             "name": "ChanceManPluginTest",
             "request": "launch",
-            "mainClass": "com.chanceman.ChanceManPluginTest",
+            "mainClass": "com.choicer.chanceman.ChanceManPluginTest",
             "projectName": "chance-man-1",
             "vmArgs": "-ea"
         }

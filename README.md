@@ -6,6 +6,10 @@ Please check out his plugin at https://github.com/ChunkyAtlas/ChanceMan if you a
 
 I do not take credit for anything !
 
+## Attribution
+
+This plugin is based on the original **Chance Man** plugin by ChunkyAtlas,
+licensed under the BSD 2-Clause License.
 ## Overview
 
 **Chance Man** is a RuneLite plugin that locks tradeable items until they are unlocked by a random roll. Designed for players who enjoy adding extra randomness or progression to their gameplay, Chance Man provides a unique system for “earning” items through luck. Items become accessible only after you roll to unlock them, with progress saved per player across sessions.

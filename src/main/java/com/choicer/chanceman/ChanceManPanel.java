@@ -1,8 +1,8 @@
-package com.chanceman;
+package com.choicer.chanceman;
 
-import com.chanceman.managers.RollAnimationManager;
-import com.chanceman.managers.RolledItemsManager;
-import com.chanceman.managers.UnlockedItemsManager;
+import com.choicer.chanceman.managers.RollAnimationManager;
+import com.choicer.chanceman.managers.RolledItemsManager;
+import com.choicer.chanceman.managers.UnlockedItemsManager;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
@@ -406,7 +406,7 @@ public class ChanceManPanel extends PluginPanel
         headerPanel.setOpaque(false);
 
         // Header icon
-        ImageIcon headerIcon = new ImageIcon(getClass().getResource("/net/runelite/client/plugins/chanceman/icon.png"));
+        ImageIcon headerIcon = new ImageIcon(getClass().getResource("/com/choicer/chanceman/icon.png"));
         JLabel iconLabel = new JLabel(headerIcon);
 
         // Title label
@@ -418,7 +418,7 @@ public class ChanceManPanel extends PluginPanel
         JButton discordButton = new JButton();
         discordButton.setToolTipText("Join The Chance Man Discord");
         // Scale the Discord icon to 16x16
-        ImageIcon discordIcon = new ImageIcon(getClass().getResource("/net/runelite/client/plugins/chanceman/discord.png"));
+        ImageIcon discordIcon = new ImageIcon(getClass().getResource("/com/choicer/chanceman/discord.png"));
         Image scaledImage = discordIcon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
         discordButton.setIcon(new ImageIcon(scaledImage));
         // Make the button look flat (no border or background)

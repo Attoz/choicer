@@ -1,6 +1,6 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
-import com.chanceman.drops.DropCache;
+import com.choicer.chanceman.drops.DropCache;
 import lombok.extern.slf4j.Slf4j;
 import javax.inject.Inject;
 import javax.inject.Singleton;

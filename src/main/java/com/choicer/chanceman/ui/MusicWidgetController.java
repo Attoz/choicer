@@ -1,9 +1,9 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
-import com.chanceman.ChanceManConfig;
-import com.chanceman.drops.DropItem;
-import com.chanceman.drops.NpcDropData;
-import com.chanceman.managers.RolledItemsManager;
+import com.choicer.chanceman.ChanceManConfig;
+import com.choicer.chanceman.drops.DropItem;
+import com.choicer.chanceman.drops.NpcDropData;
+import com.choicer.chanceman.managers.RolledItemsManager;
 
 import java.util.*;
 import java.util.stream.Collectors;

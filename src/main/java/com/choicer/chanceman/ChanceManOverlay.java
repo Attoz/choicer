@@ -1,4 +1,4 @@
-package com.chanceman;
+package com.choicer.chanceman;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -85,9 +85,9 @@ public class ChanceManOverlay extends Overlay implements RollOverlay {
 
     // Textures
     private final BufferedImage rollBoxImage =
-            ImageUtil.loadImageResource(getClass(), "/com/chanceman/roll_box.png");
+            ImageUtil.loadImageResource(getClass(), "/com/choicer/chanceman/roll_box.png");
     private final BufferedImage iconFrameImage =
-            ImageUtil.loadImageResource(getClass(), "/com/chanceman/icon_slot.png");
+            ImageUtil.loadImageResource(getClass(), "/com/choicer/chanceman/icon_slot.png");
 
     @Inject
     private AudioPlayer audioPlayer;
@@ -135,7 +135,7 @@ public class ChanceManOverlay extends Overlay implements RollOverlay {
         if (config.enableRollSounds()) {
             try {
                 float volumeDb = toDb(config.rollSoundVolume());
-                audioPlayer.play( ChanceManOverlay.class,"/com/chanceman/tick.wav", volumeDb);
+                audioPlayer.play( ChanceManOverlay.class, "/com/choicer/chanceman/tick.wav", volumeDb);
             } catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex) {
                 log.warn("ChanceMan: failed to play tick.wav", ex);
             }

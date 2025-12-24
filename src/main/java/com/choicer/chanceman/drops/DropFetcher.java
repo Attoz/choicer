@@ -1,4 +1,4 @@
-package com.chanceman.drops;
+package com.choicer.chanceman.drops;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.JsonArray;

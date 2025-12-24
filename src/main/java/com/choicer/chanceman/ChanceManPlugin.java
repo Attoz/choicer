@@ -1,27 +1,27 @@
-package com.chanceman;
+package com.choicer.chanceman;
 
-import com.chanceman.account.AccountChanged;
-import com.chanceman.account.AccountManager;
-import com.chanceman.drops.DropFetcher;
-import com.chanceman.drops.DropCache;
-import com.chanceman.filters.EnsouledHeadMapping;
-import com.chanceman.menus.ActionHandler;
-import com.chanceman.filters.ItemsFilter;
-import com.chanceman.filters.ItemAttributes;
-import com.chanceman.filters.ItemEligibility;
-import com.chanceman.ui.DropsTabUI;
-import com.chanceman.ui.DropsTooltipOverlay;
-import com.chanceman.ui.MusicWidgetController;
-import com.chanceman.ui.NpcSearchService;
-import com.chanceman.ui.MusicSearchButton;
-import com.chanceman.ui.ItemDimmerController;
+import com.choicer.chanceman.account.AccountChanged;
+import com.choicer.chanceman.account.AccountManager;
+import com.choicer.chanceman.drops.DropFetcher;
+import com.choicer.chanceman.drops.DropCache;
+import com.choicer.chanceman.filters.EnsouledHeadMapping;
+import com.choicer.chanceman.menus.ActionHandler;
+import com.choicer.chanceman.filters.ItemsFilter;
+import com.choicer.chanceman.filters.ItemAttributes;
+import com.choicer.chanceman.filters.ItemEligibility;
+import com.choicer.chanceman.ui.DropsTabUI;
+import com.choicer.chanceman.ui.DropsTooltipOverlay;
+import com.choicer.chanceman.ui.MusicWidgetController;
+import com.choicer.chanceman.ui.NpcSearchService;
+import com.choicer.chanceman.ui.MusicSearchButton;
+import com.choicer.chanceman.ui.ItemDimmerController;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import com.chanceman.managers.RollAnimationManager;
-import com.chanceman.managers.RolledItemsManager;
-import com.chanceman.managers.UnlockedItemsManager;
+import com.choicer.chanceman.managers.RollAnimationManager;
+import com.choicer.chanceman.managers.RolledItemsManager;
+import com.choicer.chanceman.managers.UnlockedItemsManager;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
@@ -47,9 +47,9 @@ import java.util.concurrent.Executors;
 
 @Slf4j
 @PluginDescriptor(
-        name = "ChanceMan",
-        description = "Locks tradeable items until unlocked via a random roll.",
-        tags = {"chance", "roll", "lock", "unlock", "luck", "game of chance", "goc"}
+        name = "Choicer",
+        description = "Extended ChanceMan with choices",
+        tags = {"chance", "roll", "lock", "unlock", "luck", "game of chance", "goc", "choices"}
 )
 public class ChanceManPlugin extends Plugin
 {
@@ -170,7 +170,7 @@ public class ChanceManPlugin extends Plugin
         }
 
         BufferedImage icon = ImageUtil.loadImageResource(
-                getClass(), "/net/runelite/client/plugins/chanceman/icon.png"
+                getClass(), "/com/choicer/chanceman/icon.png"
         );
         navButton = NavigationButton.builder()
                 .tooltip("ChanceMan")

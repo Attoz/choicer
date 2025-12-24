@@ -1,4 +1,4 @@
-package com.chanceman.account;
+package com.choicer.chanceman.account;
 
 import lombok.Getter;
 

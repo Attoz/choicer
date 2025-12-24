@@ -1,8 +1,7 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
-import net.runelite.api.SpriteID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.game.SpriteOverride;
@@ -20,7 +19,7 @@ import javax.inject.Singleton;
 public class SpriteOverrideManager implements SpriteOverride
 {
     private static final int SPRITE_ID = 910;
-    private static final String RESOURCE_PATH = "/com/chanceman/drops.png";
+    private static final String RESOURCE_PATH = "/com/choicer/chanceman/drops.png";
 
     private final SpriteManager spriteManager;
     private final Client client;

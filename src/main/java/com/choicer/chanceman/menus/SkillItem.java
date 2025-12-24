@@ -1,7 +1,6 @@
-package com.chanceman.menus;
+package com.choicer.chanceman.menus;
 
 import lombok.Getter;
-import net.runelite.api.gameval.ItemID;
 
 import java.util.HashSet;
 import java.util.HashMap;

@@ -1,6 +1,10 @@
-package com.chanceman.filters;
+package com.choicer.chanceman.filters;
 
-import com.chanceman.ChanceManConfig;
+import com.choicer.chanceman.ChanceManConfig;
+import com.choicer.chanceman.filters.ItemAttributes;
+import com.choicer.chanceman.filters.ItemEligibility;
+import com.choicer.chanceman.filters.QuestItemAllowlist;
+
 import net.runelite.api.ItemID;
 import org.junit.Before;
 import org.junit.Test;

@@ -1,4 +1,4 @@
-package com.chanceman.drops;
+package com.choicer.chanceman.drops;
 
 import lombok.Getter;
 import lombok.Setter;

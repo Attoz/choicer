@@ -1,8 +1,7 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
-import net.runelite.api.VarClientInt;
 import net.runelite.api.events.VarClientIntChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.eventbus.Subscribe;

@@ -1,15 +1,13 @@
-package com.chanceman;
+package com.choicer.chanceman;
 
 import net.runelite.api.Client;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.OverlayPosition;
-import net.runelite.client.ui.overlay.OverlayPriority;
-import net.runelite.client.util.ImageUtil;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.awt.*;
@@ -17,9 +15,10 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+
+import com.choicer.chanceman.ChanceManConfig;
+import com.choicer.chanceman.ChoicemanOverlay;
 
 @RunWith(MockitoJUnitRunner.class)
 public class ChoicemanOverlayHitboxTest {

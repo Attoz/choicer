@@ -1,8 +1,8 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
-import com.chanceman.ChanceManPlugin;
-import com.chanceman.filters.EnsouledHeadMapping;
-import com.chanceman.managers.UnlockedItemsManager;
+import com.choicer.chanceman.ChanceManPlugin;
+import com.choicer.chanceman.filters.EnsouledHeadMapping;
+import com.choicer.chanceman.managers.UnlockedItemsManager;
 import lombok.Setter;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;

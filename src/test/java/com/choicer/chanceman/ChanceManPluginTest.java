@@ -1,4 +1,6 @@
-package com.chanceman;
+package com.choicer.chanceman;
+
+import com.choicer.chanceman.ChanceManPlugin;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;

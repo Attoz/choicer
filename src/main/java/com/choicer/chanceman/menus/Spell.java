@@ -1,4 +1,4 @@
-package com.chanceman.menus;
+package com.choicer.chanceman.menus;
 
 import lombok.Getter;
 

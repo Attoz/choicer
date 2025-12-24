@@ -1,8 +1,8 @@
-package com.chanceman.drops;
+package com.choicer.chanceman.drops;
 
 import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
-import com.chanceman.account.AccountManager;
+import com.choicer.chanceman.account.AccountManager;
 import com.google.gson.Gson;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;

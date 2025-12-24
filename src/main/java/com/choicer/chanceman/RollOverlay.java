@@ -1,4 +1,4 @@
-package com.chanceman;
+package com.choicer.chanceman;
 
 import java.util.function.Supplier;
 

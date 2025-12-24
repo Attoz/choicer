@@ -1,9 +1,9 @@
-package com.chanceman.menus;
+package com.choicer.chanceman.menus;
 
-import com.chanceman.ChanceManConfig;
-import com.chanceman.ChanceManPlugin;
-import com.chanceman.filters.EnsouledHeadMapping;
-import com.chanceman.managers.UnlockedItemsManager;
+import com.choicer.chanceman.ChanceManConfig;
+import com.choicer.chanceman.ChanceManPlugin;
+import com.choicer.chanceman.filters.EnsouledHeadMapping;
+import com.choicer.chanceman.managers.UnlockedItemsManager;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.Client;

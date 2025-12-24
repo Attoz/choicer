@@ -1,6 +1,6 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
-import com.chanceman.drops.DropItem;
+import com.choicer.chanceman.drops.DropItem;
 import net.runelite.api.Client;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.MenuAction;

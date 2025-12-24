@@ -1,4 +1,4 @@
-package com.chanceman.filters;
+package com.choicer.chanceman.filters;
 
 import net.runelite.api.ItemComposition;
 

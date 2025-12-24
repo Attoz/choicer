@@ -1,4 +1,4 @@
-package com.chanceman.persist;
+package com.choicer.chanceman.persist;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;

@@ -1,4 +1,4 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
 import java.awt.Dimension;
 import java.awt.Graphics2D;
@@ -9,7 +9,7 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import com.chanceman.drops.DropItem;
+import com.choicer.chanceman.drops.DropItem;
 
 import net.runelite.api.Client;
 import net.runelite.api.Point;

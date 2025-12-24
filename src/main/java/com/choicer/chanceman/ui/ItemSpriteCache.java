@@ -1,4 +1,4 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;

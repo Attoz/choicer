@@ -1,4 +1,4 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
 import lombok.Getter;
 import net.runelite.api.Client;

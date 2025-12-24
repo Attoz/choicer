@@ -1,10 +1,10 @@
-package com.chanceman.managers;
+package com.choicer.chanceman.managers;
 
-import com.chanceman.ChanceManConfig;
-import com.chanceman.ChanceManOverlay;
-import com.chanceman.ChanceManPanel;
-import com.chanceman.ChoicemanOverlay;
-import com.chanceman.RollOverlay;
+import com.choicer.chanceman.ChanceManConfig;
+import com.choicer.chanceman.ChanceManOverlay;
+import com.choicer.chanceman.ChanceManPanel;
+import com.choicer.chanceman.ChoicemanOverlay;
+import com.choicer.chanceman.RollOverlay;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.ChatMessageType;

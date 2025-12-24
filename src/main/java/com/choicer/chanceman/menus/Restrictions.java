@@ -1,7 +1,7 @@
-package com.chanceman.menus;
+package com.choicer.chanceman.menus;
 
-import com.chanceman.ChanceManPlugin;
-import com.chanceman.managers.UnlockedItemsManager;
+import com.choicer.chanceman.ChanceManPlugin;
+import com.choicer.chanceman.managers.UnlockedItemsManager;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;

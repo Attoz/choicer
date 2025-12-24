@@ -1,6 +1,6 @@
-package com.chanceman.filters;
+package com.choicer.chanceman.filters;
 
-import com.chanceman.ChanceManConfig;
+import com.choicer.chanceman.ChanceManConfig;
 
 import java.util.Collections;
 import java.util.Set;

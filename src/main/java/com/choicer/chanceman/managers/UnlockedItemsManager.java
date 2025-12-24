@@ -1,7 +1,7 @@
-package com.chanceman.managers;
+package com.choicer.chanceman.managers;
 
-import com.chanceman.account.AccountManager;
-import com.chanceman.persist.ConfigPersistence;
+import com.choicer.chanceman.account.AccountManager;
+import com.choicer.chanceman.persist.ConfigPersistence;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import lombok.Setter;

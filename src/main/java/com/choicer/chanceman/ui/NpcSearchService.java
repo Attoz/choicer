@@ -1,7 +1,7 @@
-package com.chanceman.ui;
+package com.choicer.chanceman.ui;
 
-import com.chanceman.drops.DropCache;
-import com.chanceman.drops.NpcDropData;
+import com.choicer.chanceman.drops.DropCache;
+import com.choicer.chanceman.drops.NpcDropData;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;

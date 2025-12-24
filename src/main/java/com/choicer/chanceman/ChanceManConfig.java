@@ -1,4 +1,4 @@
-package com.chanceman;
+package com.choicer.chanceman;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;

@@ -6,9 +6,9 @@
     "configurations": [
         {
             "type": "java",
-            "name": "ChanceManPluginTest",
+            "name": "ChoicemanPluginTest",
             "request": "launch",
-            "mainClass": "com.choicer.chanceman.ChanceManPluginTest",
+            "mainClass": "com.choicer.chanceman.ChoicemanPluginTest",
             "projectName": "chance-man-1"
         },
         {
@@ -19,9 +19,9 @@
         },
         {
             "type": "java",
-            "name": "ChanceManPluginTest",
+            "name": "ChoicemanPluginTest",
             "request": "launch",
-            "mainClass": "com.choicer.chanceman.ChanceManPluginTest",
+            "mainClass": "com.choicer.chanceman.ChoicemanPluginTest",
             "projectName": "chance-man-1",
             "vmArgs": "-ea"
         }

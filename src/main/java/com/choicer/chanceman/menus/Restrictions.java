@@ -1,6 +1,6 @@
 package com.choicer.chanceman.menus;
 
-import com.choicer.chanceman.ChanceManPlugin;
+import com.choicer.chanceman.ChoicemanPlugin;
 import com.choicer.chanceman.managers.UnlockedItemsManager;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldArea;
@@ -56,7 +56,7 @@ public class Restrictions
 	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.MagicSpellbook.TOOLTIP;
 	public static final int AUTOCAST_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.Autocast.INFO;
 
-	@Inject private ChanceManPlugin plugin;
+	@Inject private ChoicemanPlugin plugin;
 	@Inject private Client client;
 	@Inject private UnlockedItemsManager unlockedItemsManager;
 	private final Set<SkillOp> enabledSkillOps = EnumSet.noneOf(SkillOp.class);

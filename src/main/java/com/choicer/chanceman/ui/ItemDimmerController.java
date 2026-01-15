@@ -1,6 +1,6 @@
 package com.choicer.chanceman.ui;
 
-import com.choicer.chanceman.ChanceManPlugin;
+import com.choicer.chanceman.ChoicemanPlugin;
 import com.choicer.chanceman.filters.EnsouledHeadMapping;
 import com.choicer.chanceman.menus.EnabledUI;
 import com.choicer.chanceman.managers.UnlockedItemsManager;
@@ -29,7 +29,7 @@ public class ItemDimmerController {
     private final Client client;
     private final UnlockedItemsManager unlockedItemsManager;
     private final ItemManager itemManager;
-    private final ChanceManPlugin plugin;
+    private final ChoicemanPlugin plugin;
 
     // Cache (per-frame) for "should dim?" decisions by raw item id
     private final Map<Integer, Boolean> dimDecisionCache = new HashMap<>(256);
@@ -43,7 +43,7 @@ public class ItemDimmerController {
             Client client,
             UnlockedItemsManager unlockedItemsManager,
             ItemManager itemManager,
-            ChanceManPlugin plugin
+            ChoicemanPlugin plugin
     ) {
         this.client = client;
         this.unlockedItemsManager = unlockedItemsManager;

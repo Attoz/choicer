@@ -1,7 +1,7 @@
 package com.choicer.chanceman.menus;
 
 import com.choicer.chanceman.ChanceManConfig;
-import com.choicer.chanceman.ChanceManPlugin;
+import com.choicer.chanceman.ChoicemanPlugin;
 import com.choicer.chanceman.filters.EnsouledHeadMapping;
 import com.choicer.chanceman.managers.UnlockedItemsManager;
 import lombok.Getter;
@@ -74,7 +74,7 @@ public class ActionHandler {
     @Inject
     private ChanceManConfig config;
 	@Inject
-	private ChanceManPlugin plugin;
+	private ChoicemanPlugin plugin;
 	@Inject
 	private Restrictions restrictions;
 	@Inject
@@ -244,7 +244,7 @@ public class ActionHandler {
 	 * If a ground item is locked, this method consumes the event.
 	 */
 	public static void handleGroundItems(ItemManager itemManager, UnlockedItemsManager unlockedItemsManager,
-										 MenuOptionClicked event, ChanceManPlugin plugin) {
+										 MenuOptionClicked event, ChoicemanPlugin plugin) {
 		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
 			int rawItemId = event.getId() != -1
 					? event.getId()

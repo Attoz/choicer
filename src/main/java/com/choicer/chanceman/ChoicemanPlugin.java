@@ -51,7 +51,7 @@ import java.util.concurrent.Executors;
         description = "Extended ChanceMan with choices",
         tags = {"chance", "roll", "lock", "unlock", "luck", "game of chance", "goc", "choices"}
 )
-public class ChanceManPlugin extends Plugin
+public class ChoicemanPlugin extends Plugin
 {
     @Inject private Client client;
     @Inject private ClientThread clientThread;

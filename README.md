@@ -113,4 +113,4 @@ Contributions are welcome! If you encounter any issues, want new features, or ha
 
 ## Contact
 
-For questions, support, or feature requests, please open an issue on GitHub or contact me at monstermonitor@proton.me
+For questions, support, or feature requests, please open an issue on GitHub or contact me on Discord: attoz

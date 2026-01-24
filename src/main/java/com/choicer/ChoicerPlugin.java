@@ -33,9 +33,13 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.Notifier;
+import net.runelite.client.plugins.Plugin;
+import net.runelite.client.plugins.PluginManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.RuneLite;
 
 import javax.inject.Inject;
 import javax.swing.*;
@@ -43,6 +47,8 @@ import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Slf4j
 @PluginDescriptor(
@@ -62,6 +68,7 @@ public class ChoicerPlugin extends Plugin
     @Inject private Gson gson;
     @Inject private ChoicerConfig config;
     @Inject private ConfigManager configManager;
+    @Inject private PluginManager pluginManager;
     @Inject private AccountManager accountManager;
     @Inject private ObtainedItemsManager obtainedItemsManager;
     @Inject private RolledItemsManager rolledItemsManager;
@@ -75,6 +82,7 @@ public class ChoicerPlugin extends Plugin
     @Inject private NpcSearchService npcSearchService;
     @Inject private MusicSearchButton musicSearchButton;
     @Inject private ItemDimmerController itemDimmerController;
+    @Inject private Notifier notifier;
 
     private ChoicerPanel choicerPanel;
     private NavigationButton navButton;
@@ -82,7 +90,12 @@ public class ChoicerPlugin extends Plugin
     @Getter private final HashSet<Integer> allTradeableItems = new LinkedHashSet<>();
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
     private volatile boolean tradeableItemsInitialized = false;
+    private volatile boolean dataLoaded = false;
+    private volatile boolean ignoreNextInventoryScan = false;
     private boolean featuresActive = false;
+    private boolean conflictWarned = false;
+    private static final int DATA_VERSION = 110;
+    private static final String DATA_VERSION_KEY_PREFIX = "dataVersion.";
 
     @Provides
     ChoicerConfig provideConfig(ConfigManager configManager)
@@ -107,7 +120,13 @@ public class ChoicerPlugin extends Plugin
     private void enableFeatures()
     {
         if (featuresActive) return;
+        if (isChanceManEnabled())
+        {
+            warnChanceManConflict();
+            return;
+        }
         featuresActive = true;
+        dataLoaded = false;
 
         getInjector().getInstance(ActionHandler.class).startUp();
         accountManager.init();
@@ -128,6 +147,8 @@ public class ChoicerPlugin extends Plugin
 
         if (accountManager.ready())
         {
+            String player = accountManager.getPlayerName();
+            boolean hadChoicerData = hasChoicerData(player);
             Runnable refreshPanel = () -> {
                 if (choicerPanel != null) {
                     SwingUtilities.invokeLater(choicerPanel::updatePanel);
@@ -139,6 +160,9 @@ public class ChoicerPlugin extends Plugin
 
             obtainedItemsManager.loadObtainedItems();
             rolledItemsManager.loadRolledItems();
+            maybeResetFor110(player, hadChoicerData);
+            dataLoaded = true;
+            ignoreNextInventoryScan = true;
         }
 
         itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
@@ -187,6 +211,8 @@ public class ChoicerPlugin extends Plugin
     {
         if (!featuresActive) return;
         featuresActive = false;
+        dataLoaded = false;
+        ignoreNextInventoryScan = false;
 
         try
         {
@@ -265,18 +291,8 @@ public class ChoicerPlugin extends Plugin
             for (int i = 0; i < 40000; i++)
             {
                 ItemComposition comp = itemManager.getItemComposition(i);
-                if (comp != null && comp.isTradeable() && !isNotTracked(i)
-                        && !ItemsFilter.isBlocked(i, config))
+                if (comp != null && isEligibleForLocking(i, comp, rolledItemsManager.getRolledItems()))
                 {
-                    if (config.freeToPlay() && comp.isMembers())
-                    {
-                        continue;
-                    }
-                    if (!ItemsFilter.isPoisonEligible(i, config.requireWeaponPoison(),
-                            rolledItemsManager.getRolledItems()))
-                    {
-                        continue;
-                    }
                     allTradeableItems.add(i);
                 }
             }
@@ -295,8 +311,25 @@ public class ChoicerPlugin extends Plugin
     @Subscribe
     public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
     {
-        if (!featuresActive) return;
         if (!event.getGroup().equals("choicer")) return;
+        switch (event.getKey())
+        {
+            case "clearSaveCurrent":
+                if (config.clearSaveCurrent())
+                {
+                    requestClearCurrentCharacterData();
+                    try
+                    {
+                        configManager.setConfiguration("choicer", "clearSaveCurrent", false);
+                    }
+                    catch (Exception ignored) { }
+                }
+                break;
+            default:
+                if (!featuresActive) return;
+                break;
+        }
+        if (!featuresActive) return;
         switch (event.getKey())
         {
             case "freeToPlay":
@@ -324,17 +357,81 @@ public class ChoicerPlugin extends Plugin
         }
     }
 
+    private void requestClearCurrentCharacterData()
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            String player = accountManager.getPlayerName();
+            if (player == null || player.isEmpty())
+            {
+                JOptionPane.showMessageDialog(
+                        null,
+                        "No active character detected.",
+                        "Choicer",
+                        JOptionPane.WARNING_MESSAGE
+                );
+                return;
+            }
+
+            int result = JOptionPane.showConfirmDialog(
+                    null,
+                    "Clear Choicer save for \"" + player + "\"?\nThis will delete local and cloud progress.",
+                    "Choicer",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE
+            );
+            if (result != JOptionPane.YES_OPTION)
+            {
+                return;
+            }
+
+            try
+            {
+                obtainedItemsManager.stopWatching();
+                rolledItemsManager.stopWatching();
+            }
+            catch (Exception ignored) { }
+
+            obtainedItemsManager.clearAllForCurrentPlayer();
+            rolledItemsManager.clearAllForCurrentPlayer();
+            dataLoaded = true;
+            ignoreNextInventoryScan = true;
+
+            if (choicerPanel != null)
+            {
+                SwingUtilities.invokeLater(choicerPanel::updatePanel);
+            }
+            refreshDropsViewerIfOpen();
+            if (notifier != null)
+            {
+                notifier.notify("Choicer: cleared save for " + player);
+            }
+
+            if (accountManager.ready())
+            {
+                obtainedItemsManager.startWatching();
+                rolledItemsManager.startWatching();
+            }
+        });
+    }
+
     @Subscribe
     private void onAccountChanged(AccountChanged event)
     {
         if (!featuresActive) return;
         dropCache.pruneOldCaches();
+        dataLoaded = false;
 
         obtainedItemsManager.stopWatching();
         rolledItemsManager.stopWatching();
 
+        String player = accountManager.getPlayerName();
+        boolean hadChoicerData = hasChoicerData(player);
         obtainedItemsManager.loadObtainedItems();
         rolledItemsManager.loadRolledItems();
+        maybeResetFor110(player, hadChoicerData);
+        dataLoaded = true;
+        ignoreNextInventoryScan = true;
 
         refreshTradeableItems();
         if (choicerPanel != null)
@@ -349,6 +446,12 @@ public class ChoicerPlugin extends Plugin
     @Subscribe
     public void onGameTick(GameTick event)
     {
+        if (featuresActive && isChanceManEnabled())
+        {
+            warnChanceManConflict();
+            disableFeatures();
+            return;
+        }
         if (!featuresActive) return;
         if (!tradeableItemsInitialized && client.getGameState() == GameState.LOGGED_IN)
         {
@@ -402,6 +505,7 @@ public class ChoicerPlugin extends Plugin
     {
         return featuresActive
                 && accountManager.ready()
+                && dataLoaded
                 && tradeableItemsInitialized
                 && rollAnimationManager.hasTradeablesReady();
     }
@@ -437,6 +541,11 @@ public class ChoicerPlugin extends Plugin
 
         if (event.getContainerId() == 93)
         {
+            if (ignoreNextInventoryScan)
+            {
+                ignoreNextInventoryScan = false;
+                return;
+            }
             Set<Integer> processed = new HashSet<>();
             for (net.runelite.api.Item item : event.getItemContainer().getItems())
             {
@@ -468,6 +577,55 @@ public class ChoicerPlugin extends Plugin
                 || worldTypes.contains(WorldType.PVP_ARENA)
                 || worldTypes.contains(WorldType.QUEST_SPEEDRUNNING)
                 || worldTypes.contains(WorldType.TOURNAMENT_WORLD));
+    }
+
+    private boolean isChanceManEnabled()
+    {
+        if (pluginManager == null) return false;
+        for (Plugin plugin : pluginManager.getPlugins())
+        {
+            if (!pluginManager.isPluginEnabled(plugin))
+            {
+                continue;
+            }
+            PluginDescriptor desc = plugin.getClass().getAnnotation(PluginDescriptor.class);
+            if (desc != null)
+            {
+                String name = desc.name();
+                if (name != null && name.toLowerCase().contains("chance"))
+                {
+                    // Avoid self-match on Choicer
+                    if (!"Choicer".equalsIgnoreCase(name))
+                    {
+                        return true;
+                    }
+                }
+            }
+            String className = plugin.getClass().getName();
+            if (className != null && className.toLowerCase().contains("chanceman"))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void warnChanceManConflict()
+    {
+        if (conflictWarned) return;
+        conflictWarned = true;
+        String msg = "Choicer is installed but inactive because ChanceMan is enabled. Disable ChanceMan to use " +
+                "Choicer. Your ChanceMan progress will be imported the first time Choicer runs.";
+        if (notifier != null)
+        {
+            notifier.notify(msg);
+        }
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                null,
+                msg,
+                "Choicer",
+                JOptionPane.WARNING_MESSAGE
+        ));
     }
 
     private void refreshDropsViewerIfOpen()
@@ -525,5 +683,74 @@ public class ChoicerPlugin extends Plugin
     public boolean isInPlay(int itemId)
     {
         return allTradeableItems.contains(itemId);
+    }
+
+    private void maybeResetFor110(String player, boolean hadChoicerData)
+    {
+        if (player == null || player.isEmpty()) return;
+
+        Integer stored = null;
+        try
+        {
+            stored = configManager.getConfiguration("choicer", dataVersionKey(player), Integer.class);
+        }
+        catch (Exception ignored) { }
+
+        if (stored != null && stored >= DATA_VERSION) return;
+
+        if (hadChoicerData)
+        {
+            boolean hasData = !obtainedItemsManager.getObtainedItems().isEmpty()
+                    || !rolledItemsManager.getRolledItems().isEmpty();
+            if (hasData)
+            {
+                String msg = "Choicer 1.1.0 reset: previous Choicer progress has been cleared for compatibility.";
+                if (notifier != null)
+                {
+                    notifier.notify(msg);
+                }
+                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+                        null,
+                        msg,
+                        "Choicer",
+                        JOptionPane.WARNING_MESSAGE
+                ));
+                obtainedItemsManager.clearAllForCurrentPlayer();
+                rolledItemsManager.clearAllForCurrentPlayer();
+            }
+        }
+
+        try
+        {
+            configManager.setConfiguration("choicer", dataVersionKey(player), DATA_VERSION);
+        }
+        catch (Exception ignored) { }
+    }
+
+    private String dataVersionKey(String player)
+    {
+        return DATA_VERSION_KEY_PREFIX + player;
+    }
+
+    private boolean hasChoicerData(String player)
+    {
+        if (player == null || player.isEmpty()) return false;
+        return hasLocalChoicerFiles(player) || hasCloudChoicerData(player);
+    }
+
+    private boolean hasLocalChoicerFiles(String player)
+    {
+        Path dir = RuneLite.RUNELITE_DIR.toPath().resolve("choicer").resolve(player);
+        Path obtained = dir.resolve("choicer_obtained.json");
+        Path rolled = dir.resolve("choicer_rolled.json");
+        return Files.exists(obtained) || Files.exists(rolled);
+    }
+
+    private boolean hasCloudChoicerData(String player)
+    {
+        String rolled = configManager.getConfiguration("choicer", "rolled." + player + ".data");
+        if (rolled != null && !rolled.isEmpty()) return true;
+        String obtained = configManager.getConfiguration("choicer", "obtained." + player + ".data");
+        return obtained != null && !obtained.isEmpty();
     }
 }

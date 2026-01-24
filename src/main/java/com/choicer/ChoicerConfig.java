@@ -3,16 +3,33 @@ package com.choicer;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
 import java.awt.Color;
 
 @ConfigGroup("choicer")
 public interface ChoicerConfig extends Config
 {
+    @ConfigSection(
+            name = "Settings",
+            description = "Choicer options and behavior. Safe to install; disable ChanceMan before enabling Choicer.",
+            position = 1
+    )
+    String settingsSection = "settings";
+
+    @ConfigSection(
+            name = "Important",
+            description = "Warning: Do not use ChanceMan and Choicer at the same time. If you are switching from " +
+                    "ChanceMan, disable it first. Choicer will import your ChanceMan progress the first time it runs.",
+            position = 99
+    )
+    String importantSection = "important";
+
     @ConfigItem(
             keyName = "freeToPlay",
             name = "Free To Play Mode",
             description = "Only allow free-to-play items",
-            position = 1
+            position = 1,
+            section = settingsSection
     )
     default boolean freeToPlay()
     {
@@ -24,7 +41,8 @@ public interface ChoicerConfig extends Config
             name = "Include F2P trade-only items",
             description = "When Free-to-Play mode is enabled, also roll items that can only " +
                     "be obtained via trading or the Grand Exchange.",
-            position = 2
+            position = 2,
+            section = settingsSection
     )
     default boolean includeF2PTradeOnlyItems() { return false; }
 
@@ -33,7 +51,8 @@ public interface ChoicerConfig extends Config
             name = "Roll Item Sets",
             description = "Include item set items in the rollable items list. Disabling this will exclude any" +
                     " item set items from random rolls.",
-            position = 3
+            position = 3,
+            section = settingsSection
     )
     default boolean enableItemSets() { return false; }
 
@@ -42,7 +61,8 @@ public interface ChoicerConfig extends Config
             name = "Roll Flatpacks",
             description = "Include flatpacks in the rollable items list. Disabling this will prevent" +
                     " flatpacks from being rolled.",
-            position = 4
+            position = 4,
+            section = settingsSection
     )
     default boolean enableFlatpacks() { return false; }
 
@@ -52,7 +72,8 @@ public interface ChoicerConfig extends Config
             description = "Force poison variants to roll only if both the base weapon and the corresponding" +
                     " weapon poison are unlocked. (Disabling this will allow poisoned variants to roll even if " +
                     "the poison is locked.)",
-            position = 5
+            position = 5,
+            section = settingsSection
     )
     default boolean requireWeaponPoison() { return true; }
 
@@ -60,7 +81,8 @@ public interface ChoicerConfig extends Config
             keyName = "enableRollSounds",
             name = "Enable Roll Sounds",
             description = "Toggle Roll Sound",
-            position = 6
+            position = 6,
+            section = settingsSection
     )
     default boolean enableRollSounds() { return true; }
 
@@ -69,7 +91,8 @@ public interface ChoicerConfig extends Config
             keyName = "rollSoundVolume",
             name = "Roll Sound Volume",
             description = "Volume of the roll sound (0–100%).",
-            position = 7
+            position = 7,
+            section = settingsSection
     )
     default int rollSoundVolume() { return 50; }
 
@@ -78,7 +101,8 @@ public interface ChoicerConfig extends Config
             keyName = "requireRolledUnlockedForGe",
             name = "GE Requires Obtained and Rolled",
             description = "Only Allow Grand Exchange results for items that have been both obtained and rolled.",
-            position = 8
+            position = 8,
+            section = settingsSection
     )
     default boolean requireRolledUnlockedForGe() { return true; }
 
@@ -87,7 +111,8 @@ public interface ChoicerConfig extends Config
             keyName = "sortDropsByRarity",
             name = "Sort Drops by Rarity",
             description = "Order drops in the Show Drops menu by rarity instead of item ID.",
-            position = 9
+            position = 9,
+            section = settingsSection
     )
     default boolean sortDropsByRarity() { return true; }
 
@@ -95,7 +120,8 @@ public interface ChoicerConfig extends Config
             keyName = "showRareDropTable",
             name = "Show Rare Drop Table",
             description = "Include rare drop table items in the Show Drops menu.",
-            position = 10
+            position = 10,
+            section = settingsSection
     )
     default boolean showRareDropTable() { return true; }
 
@@ -103,7 +129,8 @@ public interface ChoicerConfig extends Config
             keyName = "showGemDropTable",
             name = "Show Gem Drop Table",
             description = "Include gem drop table items in the Show Drops menu.",
-            position = 11
+            position = 11,
+            section = settingsSection
     )
     default boolean showGemDropTable() { return true; }
 
@@ -111,7 +138,8 @@ public interface ChoicerConfig extends Config
             keyName = "showDropsAlwaysOpen",
             name = "Show Drops Always Open",
             description = "Keep the Show Drops view active when switching away from the Music tab. Use the close button to exit.",
-            position = 12
+            position = 12,
+            section = settingsSection
     )
     default boolean showDropsAlwaysOpen()
     {
@@ -122,7 +150,8 @@ public interface ChoicerConfig extends Config
             keyName = "deprioritizeLockedOptions",
             name = "Deprioritize Locked Menu Options",
             description = "Sorts locked menu options below the Walk Here option.",
-            position = 13
+            position = 13,
+            section = settingsSection
     )
     default boolean deprioritizeLockedOptions() { return true; }
 
@@ -130,7 +159,8 @@ public interface ChoicerConfig extends Config
             keyName = "unlockedItemColor",
             name = "Rolled Item Color",
             description = "Color of the rolled (unlocked) item name in chat messages.",
-            position = 14
+            position = 14,
+            section = settingsSection
     )
     default Color unlockedItemColor()
     {
@@ -141,7 +171,8 @@ public interface ChoicerConfig extends Config
             keyName = "rolledItemColor",
             name = "Obtained Item Color",
             description = "Color of the obtained item name in chat messages.",
-            position = 15
+            position = 15,
+            section = settingsSection
     )
     default Color rolledItemColor()
     {
@@ -152,7 +183,8 @@ public interface ChoicerConfig extends Config
             keyName = "dimLockedItemsEnabled",
             name = "Dim locked items",
             description = "Dim any item icons that have not been unlocked.",
-            position = 16
+            position = 16,
+            section = settingsSection
     )
     default boolean dimLockedItemsEnabled()
     {
@@ -163,7 +195,8 @@ public interface ChoicerConfig extends Config
             keyName = "includeUntradeable",
             name = "Include Untradeable Items",
             description = "Enable to include untradeable items in the rolling system",
-            position = 17
+            position = 17,
+            section = settingsSection
     )
     default boolean includeUntradeable()
     {
@@ -175,7 +208,8 @@ public interface ChoicerConfig extends Config
             keyName = "dimLockedItemsOpacity",
             name = "Dim opacity",
             description = "0 = no dim (fully visible), 255 = fully transparent.",
-            position = 17
+            position = 17,
+            section = settingsSection
     )
     default int dimLockedItemsOpacity()
     {
@@ -187,7 +221,8 @@ public interface ChoicerConfig extends Config
             name = "Include Quest Items",
             description = "Enable to include quest items in the rolling system",
             position = 20,
-            hidden = true
+            hidden = true,
+            section = settingsSection
     )
     default boolean includeQuestItems()
     {
@@ -199,10 +234,23 @@ public interface ChoicerConfig extends Config
             keyName = "choicerOptionCount",
             name = "Choicer Options",
             description = "Number of choices presented when Choicer rolls.",
-            position = 18
+            position = 18,
+            section = settingsSection
     )
     default int choicerOptionCount()
     {
         return 5;
+    }
+
+    @ConfigItem(
+            keyName = "clearSaveCurrent",
+            name = "Clear Save (Current Character)",
+            description = "Delete local + cloud progress for the current character.",
+            position = 99,
+            section = importantSection
+    )
+    default boolean clearSaveCurrent()
+    {
+        return false;
     }
 }

@@ -153,6 +153,11 @@ Progress is stored per character:
 └── choicer_rolled.json
 
 Legacy ChanceMan files are migrated forward automatically.
+If you are switching from ChanceMan, disable ChanceMan first, then enable Choicer.
+On first run Choicer will import:
+- ~/.runelite/chanceman/<player_name>/chanceman_unlocked.json -> choicer_rolled.json
+- ~/.runelite/chanceman/<player_name>/chanceman_rolled.json -> choicer_obtained.json
+Choicer 1.1.0 performs a one-time reset for users upgrading from earlier Choicer versions.
 
 ---
 

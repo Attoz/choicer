@@ -20,6 +20,7 @@ import java.awt.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.awt.LinearGradientPaint;
@@ -54,22 +55,25 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final int SPACING = 5;
 
     private static final int FRAME_CONTENT_INSET = 2;
-    private static final int SLOT_PADDING_X = 6;
-    private static final int SLOT_PADDING_Y = 5;
+    private static final int SLOT_PADDING_X = 4;
+    private static final int SLOT_PADDING_Y = 3;
     private static final int SELECTION_TOP_MARGIN = 15;
     private static final float CHOICE_SLOT_SCALE = 1.0f;
     private static final int MIN_CHOICE_SLOT_WIDTH = 132;
     private static final int MIN_CHOICE_SLOT_HEIGHT = 90;
     // Keep scroll slots as wide as the eventual choice buttons so icon centers align.
     private static final int MIN_SCROLL_SLOT_WIDTH = MIN_CHOICE_SLOT_WIDTH;
-    private static final int SCROLL_ICON_TARGET = 64;
-    private static final int SCROLL_ICON_TARGET_COMPACT = 52;
-    private static final int SCROLL_ITEM_GAP = 6;
+    private static final int SCROLL_ICON_TARGET = 70;
+    private static final int SCROLL_ICON_TARGET_COMPACT = 48;
+    private static final int SCROLL_ITEM_GAP = 4;
     private static final float DEFAULT_STEP = SCROLL_ICON_TARGET + SCROLL_ITEM_GAP;
-    private static final Color SLOT_BORDER = new Color(186, 148, 96, 235);
-    private static final Color SLOT_FILL_TOP = new Color(54, 46, 34, 235);
-    private static final Color SLOT_FILL_BOTTOM = new Color(33, 28, 22, 235);
-    private static final Color SLOT_HIGHLIGHT = new Color(220, 188, 135, 95);
+    private static final Color SLOT_BORDER = new Color(168, 138, 92, 210);
+    private static final Color SLOT_FILL_TOP = new Color(52, 45, 34, 225);
+    private static final Color SLOT_FILL_BOTTOM = new Color(32, 27, 21, 225);
+    private static final Color SLOT_HIGHLIGHT = new Color(210, 182, 128, 70);
+    private static final Color CENTER_FRAME_BORDER = new Color(214, 182, 120, 210);
+    private static final Color CENTER_FRAME_INNER = new Color(70, 55, 36, 180);
+    private static final Color CENTER_FRAME_GLOW = new Color(230, 200, 140, 80);
     private static final Font LABEL_FONT = new Font("SansSerif", Font.BOLD, 12);
     private static final Color TRADEABLE_GLOW_INNER = new Color(214, 184, 112, 170);
     private static final Color TRADEABLE_GLOW_OUTER = new Color(196, 168, 110, 0);
@@ -78,11 +82,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final Color[] TRADEABLE_GLOW = new Color[]{TRADEABLE_GLOW_INNER, TRADEABLE_GLOW_OUTER};
     private static final Color[] UNTRADEABLE_GLOW = new Color[]{UNTRADEABLE_GLOW_INNER, UNTRADEABLE_GLOW_OUTER};
 
-    private static final int ICON_COUNT = 3;
+    private static final int ICON_COUNT = 5;
     private static final int DRAW_COUNT = ICON_COUNT + 1;
     // Ensure scroll frames mirror the spacing seen in the final choice buttons.
-    private static final int COLUMN_SPACING = 24;
-    private static final int VISIBLE_ROLLING_ITEM_COUNT = 4;
+    private static final int COLUMN_SPACING = 16;
+    private static final int VISIBLE_ROLLING_ITEM_COUNT = 5;
     private static final int VISIBLE_SELECTION_ITEM_COUNT = 2;
     private static final int CHOICE_BUTTON_INSET = 6;
     private static final Color CHOICE_BUTTON_FILL_TOP = new Color(64, 53, 37, 235);
@@ -127,9 +131,6 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     @Inject private AudioPlayer audioPlayer;
     @Inject private ChoicerConfig config;
 
-    private final BufferedImage iconFrameImage =
-            ImageUtil.loadImageResource(getClass(), "/com/choicer/icon_slot.png");
-
     private volatile boolean isAnimating = false;
     private long rollDurationMs;
     private long rollStartMs = 0L;
@@ -138,6 +139,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private float currentSpeed = INITIAL_SPEED;
     private Supplier<Integer> randomLockedItemSupplier;
     private long lastUpdateNanos = 0L;
+    private float smoothedDt = 0f;
 
     private boolean isSnapping = false;
     private long snapStartMs = 0L;
@@ -361,6 +363,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         this.randomLockedItemSupplier = randomLockedItemSupplier;
         this.isAnimating = true;
         this.lastUpdateNanos = System.nanoTime();
+        this.smoothedDt = 0f;
 
         this.isSnapping = false;
         this.snapStartMs = 0L;
@@ -454,18 +457,29 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         float dt = 0f;
         if (lastUpdateNanos != 0L) {
             dt = (nowNanos - lastUpdateNanos) / 1_000_000_000f;
+            if (dt < 0f) dt = 0f;
             if (dt > MAX_DT) dt = MAX_DT;
         }
         lastUpdateNanos = nowNanos;
+        if (smoothedDt == 0f)
+        {
+            smoothedDt = dt;
+        }
+        else
+        {
+            smoothedDt = smoothedDt * 0.85f + dt * 0.15f;
+        }
+        dt = smoothedDt;
 
         if (!highlightPhase) {
             final float t = (rollDurationMs > 0) ? Math.min(1f, elapsed / (float) rollDurationMs) : 1f;
-            final float eased = (float) Math.pow(1f - t, 3);
-            currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * eased;
+            final float speedT = smootherStep(1f - t);
+            currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * speedT;
             int remainingMs = (int) (rollStartMs + rollDurationMs - nowMs);
             if (remainingMs > 0 && remainingMs <= ANTICIPATION_WINDOW_MS)
             {
-                float factor = 0.6f + 0.4f * (remainingMs / (float) ANTICIPATION_WINDOW_MS);
+                float ramp = smootherStep(remainingMs / (float) ANTICIPATION_WINDOW_MS);
+                float factor = 0.6f + 0.4f * ramp;
                 currentSpeed *= factor;
             }
         }
@@ -552,6 +566,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             }
 
             g.setClip(slotsLeftX, slotTopY, totalWidth, slotHeight);
+            drawSelectionBand(g, slotsLeftX, slotTopY, totalWidth, slotHeight, contentCenterY, iconSize);
 
             synchronized (columnHitboxes)
             {
@@ -575,7 +590,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 if (!highlightPhase) {
                     if (isSnapping) {
                         final float u = Math.min(1f, (nowMs - snapStartMs) / (float) SNAP_DURATION_MS);
-                        final float s = u * u * (3f - 2f * u);
+                        final float s = smootherStep(u);
                         final float start = rollOffset;
                         final float end = snapTarget;
                         rollOffset = start + (end - start) * s;
@@ -622,9 +637,6 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
                             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
                         }
-                        if (iconFrameImage != null) {
-                            g.drawImage(iconFrameImage, iconsX, drawY, iconSize, iconSize, null);
-                        }
                         final int x = iconsX + innerBoxXInset;
                         final int y = drawY + innerBoxYInset;
                         g.drawImage(image, x, y, innerBoxW, innerBoxH, null);
@@ -647,6 +659,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         final float columnOffset = rollOffset + columnOffsetAdjust[col];
                         final float columnBaseF = iconsTopYF + centerIndex * activeStep - columnOffset;
                         final int columnBaseY = Math.round(columnBaseF);
+                        drawCenterFrame(g, columnXs[col] + iconPadX, columnBaseY, iconSize);
                         drawHighlight(g, columnXs[col] + iconPadX, columnBaseY, centerItemId, iconSize, false);
                         float impactAlpha = getImpactAlpha(nowMs);
                         if (impactAlpha > 0f)
@@ -1490,6 +1503,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         return adjusted;
     }
 
+    private static float smootherStep(float t)
+    {
+        if (t <= 0f) return 0f;
+        if (t >= 1f) return 1f;
+        return t * t * t * (t * (t * 6f - 15f) + 10f);
+    }
+
     private void drawSlotWindow(Graphics2D g, int x, int y, int width, int height, float scale)
     {
         Rectangle2D.Float frame = new Rectangle2D.Float(x, y, width, height);
@@ -1541,6 +1561,103 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         drawRectBracket(g, x - bracketPad, y - bracketPad, width + bracketPad * 2, height + bracketPad * 2, corner + bracketPad);
         g.setComposite(oldComposite);
 
+        g.setPaint(oldPaint);
+        g.setStroke(oldStroke);
+    }
+
+    private void drawIconSlot(Graphics2D g, int x, int y, int size)
+    {
+        float arc = Math.max(6f, size * 0.18f);
+        Rectangle2D.Float frame = new Rectangle2D.Float(x, y, size, size);
+        RoundRectangle2D.Float round = new RoundRectangle2D.Float(x, y, size, size, arc, arc);
+
+        Paint oldPaint = g.getPaint();
+        Stroke oldStroke = g.getStroke();
+        Composite oldComposite = g.getComposite();
+
+        GradientPaint fill = new GradientPaint(
+                x,
+                y,
+                SLOT_FILL_TOP,
+                x,
+                y + size,
+                SLOT_FILL_BOTTOM
+        );
+        g.setPaint(fill);
+        g.fill(round);
+
+        g.setColor(new Color(0, 0, 0, 70));
+        g.setStroke(new BasicStroke(1.1f));
+        g.draw(round);
+
+        g.setColor(SLOT_BORDER);
+        g.setStroke(new BasicStroke(0.9f));
+        g.draw(new RoundRectangle2D.Float(x + 0.8f, y + 0.8f, size - 1.6f, size - 1.6f, arc, arc));
+
+        g.setComposite(AlphaComposite.SrcOver.derive(0.22f));
+        g.setColor(new Color(230, 210, 160, 120));
+        g.setStroke(new BasicStroke(0.8f));
+        g.draw(new RoundRectangle2D.Float(x + 2.2f, y + 2.2f, size - 4.4f, size - 4.4f, arc * 0.8f, arc * 0.8f));
+
+        g.setComposite(oldComposite);
+        g.setPaint(oldPaint);
+        g.setStroke(oldStroke);
+    }
+
+    private void drawSelectionBand(Graphics2D g, int x, int y, int width, int height, float centerY, int iconSize)
+    {
+        int bandHeight = Math.max(14, iconSize + 6);
+        int bandY = Math.round(centerY - bandHeight / 2f);
+        if (bandY < y) bandY = y;
+        if (bandY + bandHeight > y + height) bandY = y + height - bandHeight;
+
+        Composite oldComposite = g.getComposite();
+        Paint oldPaint = g.getPaint();
+
+        g.setComposite(AlphaComposite.SrcOver.derive(0.18f));
+        GradientPaint band = new GradientPaint(
+                x,
+                bandY,
+                new Color(255, 236, 190, 110),
+                x,
+                bandY + bandHeight,
+                new Color(255, 236, 190, 0)
+        );
+        g.setPaint(band);
+        g.fillRect(x + 2, bandY, width - 4, bandHeight);
+
+        g.setComposite(AlphaComposite.SrcOver.derive(0.22f));
+        g.setColor(new Color(0, 0, 0, 70));
+        g.drawLine(x + 4, bandY, x + width - 5, bandY);
+        g.drawLine(x + 4, bandY + bandHeight - 1, x + width - 5, bandY + bandHeight - 1);
+
+        g.setComposite(oldComposite);
+        g.setPaint(oldPaint);
+    }
+
+    private void drawCenterFrame(Graphics2D g, int x, int y, int size)
+    {
+        float arc = Math.max(7f, size * 0.22f);
+        RoundRectangle2D.Float round = new RoundRectangle2D.Float(x, y, size, size, arc, arc);
+
+        Paint oldPaint = g.getPaint();
+        Stroke oldStroke = g.getStroke();
+        Composite oldComposite = g.getComposite();
+
+        g.setColor(CENTER_FRAME_INNER);
+        g.fill(round);
+
+        g.setComposite(AlphaComposite.SrcOver.derive(0.35f));
+        g.setColor(CENTER_FRAME_GLOW);
+        g.setStroke(new BasicStroke(1.2f));
+        g.draw(new RoundRectangle2D.Float(x - 1f, y - 1f, size + 2f, size + 2f, arc + 2f, arc + 2f));
+
+        g.setComposite(AlphaComposite.SrcOver.derive(0.9f));
+        g.setColor(CENTER_FRAME_BORDER);
+        g.setStroke(new BasicStroke(1.4f));
+        g.draw(round);
+
+        g.setComposite(oldComposite);
         g.setPaint(oldPaint);
         g.setStroke(oldStroke);
     }

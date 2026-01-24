@@ -26,11 +26,9 @@ public class RolledItemsManager
 {
     private static final int MAX_BACKUPS = 10;
     private static final String CFG_KEY = "rolled";
-    private static final String LEGACY_CFG_KEY = "unlocked";
     private static final String FILE_NAME = "choicer_rolled.json";
-    private static final String LEGACY_FILE_NAME = "chanceman_unlocked.json";
-    private static final String LEGACY_OBTAINED_FILE = "chanceman_rolled.json";
-    private static final String LEGACY_OBTAINED_DEST = "choicer_obtained.json";
+    private static final String LEGACY_DIR = "chanceman";
+    private static final String LEGACY_FILE = "chanceman_unlocked.json";
 
     private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
     private static final long CONFIG_DEBOUNCE_MS = 3000L;
@@ -88,6 +86,38 @@ public class RolledItemsManager
     public void saveRolledItems()
     {
         saveInternal(System.currentTimeMillis(), true);
+    }
+
+    /** Clear local + cloud data for the current player (for testing/reset). */
+    public void clearAllForCurrentPlayer()
+    {
+        String player = accountManager.getPlayerName();
+        if (player == null || player.isEmpty())
+        {
+            return;
+        }
+
+        synchronized (rolledItems)
+        {
+            rolledItems.clear();
+        }
+        dirty = false;
+
+        log.info("Choicer rolled clear: player={}, localFile={}", player, FILE_NAME);
+        deleteLocalIfExists(FILE_NAME);
+
+        long now = System.currentTimeMillis();
+        try
+        {
+            log.info("Choicer rolled clear: writing empty cloud set at ts={}", now);
+            configPersistence.writeStampedSet(player, CFG_KEY, Collections.emptySet(), now);
+        }
+        catch (Exception e)
+        {
+            log.error("Choicer: failed to clear rolled cloud state", e);
+        }
+
+        safeNotifyChange();
     }
 
     /** Start watching the JSON on a dedicated daemon thread. */
@@ -160,17 +190,10 @@ public class RolledItemsManager
     {
         String player = accountManager.getPlayerName();
         if (player == null) return;
-        migrateLegacyObtainedFileIfNeeded();
         Path newFile = safeGetFilePathOrNull(FILE_NAME);
         if (newFile == null) return;
 
         boolean newFileExisted = Files.exists(newFile);
-
-        // Read local new first; if missing, seed from legacy unlocked file
-        Path legacyFile = safeGetFilePathOrNull(LEGACY_FILE_NAME);
-        Path legacyRolledV3 = safeGetFilePathOrNull(LEGACY_OBTAINED_FILE);
-        boolean legacySeeded = false;
-        Path legacySeedPath = null;
 
         Set<Integer> localNew = readLocalJson(newFile);
         Set<Integer> local;
@@ -180,71 +203,57 @@ public class RolledItemsManager
         }
         else
         {
-            Set<Integer> legacySet = new LinkedHashSet<>();
-            boolean legacyUnlockedExists = legacyFile != null && Files.exists(legacyFile);
-            boolean legacyRolledV3Exists = legacyRolledV3 != null && Files.exists(legacyRolledV3);
+            local = new LinkedHashSet<>();
+        }
 
-            if (legacyUnlockedExists)
-            {
-                legacySet = readLocalJson(legacyFile);
-                legacySeedPath = legacyFile;
-            }
-            else if (legacyRolledV3Exists)
-            {
-                legacySet = readLocalJson(legacyRolledV3);
-                legacySeedPath = legacyRolledV3;
-            }
+        // Cloud: new only
+        ConfigPersistence.StampedSet cloudStampedNew = readCloud(player, CFG_KEY);
+        Set<Integer> cloudNew = new LinkedHashSet<>(cloudStampedNew.data);
+        long cloudTs = cloudStampedNew.ts;
 
-            local = legacySet;
-            legacySeeded = !legacySet.isEmpty();
+        boolean migrated = false;
+        if (shouldMigrateLegacy(newFileExisted, local, cloudNew, cloudTs))
+        {
+            Set<Integer> legacy = readLegacyJson(player, LEGACY_FILE);
+            if (!legacy.isEmpty())
+            {
+                local = legacy;
+                migrated = true;
+                log.info("Choicer rolled migrate: imported {} items from ChanceMan", legacy.size());
+            }
         }
 
         long localMtime = newFileExisted ? safeLastModified(newFile) : 0L;
-
-        // Cloud: new + legacy
-        ConfigPersistence.StampedSet cloudStampedNew = readCloud(player, CFG_KEY);
-        ConfigPersistence.StampedSet cloudStampedLegacy = readCloud(player, LEGACY_CFG_KEY);
-
-        Set<Integer> cloudNew = new LinkedHashSet<>(cloudStampedNew.data);
-        long cloudNewTs = cloudStampedNew.ts;
-
-        Set<Integer> cloudLegacy = new LinkedHashSet<>(cloudStampedLegacy.data);
-        long cloudLegacyTs = cloudStampedLegacy.ts;
-
-        // If new cloud is empty, allow legacy to seed
-        Set<Integer> cloudMerged = new LinkedHashSet<>(cloudNew);
-        if (cloudMerged.isEmpty() && !cloudLegacy.isEmpty())
+        if (migrated)
         {
-            cloudMerged.addAll(cloudLegacy);
+            localMtime = System.currentTimeMillis();
         }
-
-        long cloudTs = Math.max(cloudNewTs, cloudLegacyTs);
 
         // LWW between local and cloud
         Set<Integer> winner;
         Long winnerStamp = null;
         boolean needPersist;
 
-        if (localMtime > cloudTs) { winner = local; winnerStamp = localMtime; needPersist = true; }
-        else if (cloudTs > localMtime) { winner = cloudMerged; winnerStamp = cloudTs; needPersist = true; }
-        else { winner = local; needPersist = !newFileExisted; }
+        String winnerSource;
+        if (localMtime > cloudTs) { winner = local; winnerStamp = localMtime; needPersist = true; winnerSource = "local"; }
+        else if (cloudTs > localMtime) { winner = cloudNew; winnerStamp = cloudTs; needPersist = true; winnerSource = "cloud"; }
+        else { winner = local; needPersist = !newFileExisted; winnerSource = "local"; }
+
+        log.info("Choicer rolled reconcile: player={}, localPath={}, localExists={}, localCount={}, localMtime={}, cloudCount={}, cloudTs={}, winner={}, needPersist={}",
+                player,
+                newFile,
+                newFileExisted,
+                local.size(),
+                localMtime,
+                cloudNew.size(),
+                cloudTs,
+                winnerSource,
+                needPersist);
 
         synchronized (rolledItems)
         {
             rolledItems.clear();
             rolledItems.addAll(winner);
-        }
-
-        if (legacySeeded && legacySeedPath != null && Files.exists(legacySeedPath) && !newFileExisted)
-        {
-            try
-            {
-                archiveLegacyFile(legacySeedPath);
-            }
-            catch (IOException ioe)
-            {
-                log.error("Failed to archive legacy rolled source during migration", ioe);
-            }
         }
 
         if (needPersist)
@@ -254,58 +263,6 @@ public class RolledItemsManager
         }
 
         dirty = false;
-    }
-
-    private void migrateLegacyObtainedFileIfNeeded()
-    {
-        Path legacyUnlocked = safeGetFilePathOrNull(LEGACY_FILE_NAME);
-        if (legacyUnlocked == null) return;
-
-        // Legacy marker: if this doesn't exist, it's a new-ish player and we should do nothing.
-        if (!Files.exists(legacyUnlocked)) return;
-
-        Path obtainedFile = safeGetFilePathOrNull(LEGACY_OBTAINED_DEST);
-        Path legacyObtainedFile = safeGetFilePathOrNull(LEGACY_OBTAINED_FILE);
-        if (obtainedFile == null || legacyObtainedFile == null) return;
-
-        // If obtained already exists, migration is done
-        if (Files.exists(obtainedFile)) return;
-
-        // If legacy obtained doesn't exist, nothing to migrate.
-        if (!Files.exists(legacyObtainedFile)) return;
-
-        try
-        {
-            // Only migrate if legacy obtained actually has data; if it's empty, don't bother.
-            Set<Integer> legacyData = readLocalJson(legacyObtainedFile);
-            if (legacyData.isEmpty())
-            {
-                return;
-            }
-
-            // Ensure directory exists
-            Files.createDirectories(obtainedFile.getParent());
-
-            // Move legacy file into the new obtained file name
-            try
-            {
-                Files.move(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
-            }
-            catch (IOException moveFail)
-            {
-                // Fallback: copy + delete
-                Files.copy(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
-                Files.deleteIfExists(legacyObtainedFile);
-            }
-
-            log.info("Choicer v3 migration: moved legacy obtained file {} -> {}",
-                    legacyObtainedFile.getFileName(), obtainedFile.getFileName());
-        }
-        catch (Exception e)
-        {
-            log.error("Choicer v3 migration: failed to migrate legacy obtained rolled.json -> obtained.json; refusing to proceed", e);
-            throw new RuntimeException(e);
-        }
     }
 
     /** Disk write + cloud mirror (debounced or immediate). */
@@ -405,23 +362,20 @@ public class RolledItemsManager
         catch (IOException ioe) { return null; }
     }
 
-    /** Move a legacy file out of the way so the new domain file name can take over. */
-    private void archiveLegacyFile(Path legacyFile) throws IOException
+    private void deleteLocalIfExists(String fileName)
     {
-        Path backups = legacyFile.getParent().resolve("backups");
-        Files.createDirectories(backups);
-
-        String ts = new SimpleDateFormat(BACKUP_TS_PATTERN).format(new Date());
-        Path archived = backups.resolve(legacyFile.getFileName() + ".migrated." + ts + ".bak");
-
         try
         {
-            Files.move(legacyFile, archived, StandardCopyOption.REPLACE_EXISTING);
+            Path path = safeGetFilePathOrNull(fileName);
+            if (path != null)
+            {
+                boolean deleted = Files.deleteIfExists(path);
+                log.info("Choicer rolled clear: deleteLocal path={}, deleted={}", path, deleted);
+            }
         }
-        catch (IOException moveFail)
+        catch (IOException ioe)
         {
-            Files.copy(legacyFile, archived, StandardCopyOption.REPLACE_EXISTING);
-            Files.deleteIfExists(legacyFile);
+            log.warn("Choicer: failed to delete {}", fileName, ioe);
         }
     }
 
@@ -507,12 +461,44 @@ public class RolledItemsManager
         {
             log.error("Error reading rolled items JSON", e);
         }
+        log.info("Choicer rolled readLocalJson: path={}, count={}", file, local.size());
         return local;
+    }
+
+    private boolean shouldMigrateLegacy(boolean localExists, Set<Integer> local, Set<Integer> cloud, long cloudTs)
+    {
+        return (!localExists || local.isEmpty())
+                && (cloud == null || cloud.isEmpty())
+                && cloudTs == 0L;
+    }
+
+    private Set<Integer> readLegacyJson(String player, String legacyFileName)
+    {
+        Set<Integer> legacy = new LinkedHashSet<>();
+        if (player == null || player.isEmpty()) return legacy;
+        Path legacyPath = RUNELITE_DIR.toPath().resolve(LEGACY_DIR).resolve(player).resolve(legacyFileName);
+        if (!Files.exists(legacyPath)) return legacy;
+        try (Reader r = Files.newBufferedReader(legacyPath))
+        {
+            Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
+            if (loaded != null) legacy.addAll(loaded);
+        }
+        catch (IOException e)
+        {
+            log.error("Error reading legacy ChanceMan JSON: {}", legacyPath, e);
+        }
+        return legacy;
     }
 
     private ConfigPersistence.StampedSet readCloud(String player, String key)
     {
-        try { return configPersistence.readStampedSet(player, key); }
+        try
+        {
+            ConfigPersistence.StampedSet stamped = configPersistence.readStampedSet(player, key);
+            log.info("Choicer rolled readCloud: player={}, key={}, count={}, ts={}",
+                    player, key, stamped.data.size(), stamped.ts);
+            return stamped;
+        }
         catch (Exception e) { return new ConfigPersistence.StampedSet(new LinkedHashSet<>(), 0L); }
     }
 

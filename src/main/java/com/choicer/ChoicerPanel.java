@@ -42,6 +42,9 @@ public class ChoicerPanel extends PluginPanel
     private static final Color SELECTION = new Color(90, 75, 50);
     private static final Color FIELD_BG = new Color(42, 36, 27);
     private static final Color BUTTON_BG = new Color(60, 63, 65);
+    private static final Color BANNER_BG = new Color(54, 44, 30);
+    private static final Color BANNER_BORDER = new Color(140, 112, 64);
+    private static final Color BANNER_TEXT = new Color(232, 210, 160);
 
     private static final Font TITLE_FONT = new Font("Georgia", Font.BOLD, 18);
     private static final Font UI_FONT = new Font("Georgia", Font.PLAIN, 12);
@@ -179,9 +182,19 @@ public class ChoicerPanel extends PluginPanel
         searchBox.setBackground(FIELD_BG);
         searchBox.setBorder(new EmptyBorder(6, 8, 6, 8));
 
-        JLabel icon = new JLabel("\uD83D\uDD0D");
-        icon.setForeground(TEXT_MUTED);
+        JLabel icon = new JLabel();
         icon.setBorder(new EmptyBorder(0, 0, 0, 6));
+        BufferedImage searchImg = ImageUtil.loadImageResource(getClass(), "/com/choicer/search.png");
+        if (searchImg != null)
+        {
+            Image scaled = searchImg.getScaledInstance(14, 14, Image.SCALE_SMOOTH);
+            icon.setIcon(new ImageIcon(scaled));
+        }
+        else
+        {
+            icon.setText("\uD83D\uDD0D");
+            icon.setForeground(TEXT_MUTED);
+        }
         searchBox.add(icon, BorderLayout.WEST);
 
         searchField.setBackground(FIELD_BG);

@@ -213,27 +213,22 @@ public class RollAnimationManager
             final int choiceCount = choicerOptions.size();
             final int queuedId = queuedItemId;
             clientThread.invoke(() -> {
+                String playerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Player";
                 String rolledTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce), config.unlockedItemColor());
+                String playerTag = ColorUtil.wrapWithColorTag(playerName, config.rolledItemColor());
                 String message;
-                if (wasManualRoll)
-                {
-                    String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
-                    message = announceChoicer
-                            ? "Choicer rolled " + rolledTag + " after " + pressTag + " presented "
-                            + choiceCount + " choices."
-                            : "Rolled " + rolledTag + " by " + pressTag;
-                }
-                else if (queuedId > 0)
+                if (queuedId > 0)
                 {
                     String obtainedTag = ColorUtil.wrapWithColorTag(getItemName(queuedId), config.rolledItemColor());
                     message = announceChoicer
-                            ? "Choicer rolled " + rolledTag + " after obtaining " + obtainedTag + " presented "
-                            + choiceCount + " choices."
-                            : "Rolled " + rolledTag + " by obtaining " + obtainedTag;
+                            ? playerTag + " chose " + rolledTag + " after obtaining " + obtainedTag + " (from " + choiceCount + " choices)."
+                            : playerTag + " chose " + rolledTag + " after obtaining " + obtainedTag + ".";
                 }
                 else
                 {
-                    message = "Rolled " + rolledTag;
+                    message = announceChoicer
+                            ? playerTag + " chose " + rolledTag + " (from " + choiceCount + " choices)."
+                            : playerTag + " chose " + rolledTag + ".";
                 }
                 client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
                 if (choicerPanel != null) {

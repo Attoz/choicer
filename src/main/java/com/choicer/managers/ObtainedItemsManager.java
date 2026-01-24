@@ -27,8 +27,6 @@ public class ObtainedItemsManager
     private static final int MAX_BACKUPS = 10;
     private static final String CFG_KEY = "obtained";
     private static final String FILE_NAME = "choicer_obtained.json";
-    private static final String LEGACY_DIR = "chanceman";
-    private static final String LEGACY_FILE = "chanceman_rolled.json";
     private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
     private static final long CONFIG_DEBOUNCE_MS = 3000L;
     private static final long SELF_WRITE_GRACE_MS = 1500L;
@@ -207,23 +205,7 @@ public class ObtainedItemsManager
         Set<Integer> cloudNew = new LinkedHashSet<>(cloudStampedNew.data);
         long cloudTs = cloudStampedNew.ts;
 
-        boolean migrated = false;
-        if (shouldMigrateLegacy(newFileExisted, local, cloudNew, cloudTs))
-        {
-            Set<Integer> legacy = readLegacyJson(player, LEGACY_FILE);
-            if (!legacy.isEmpty())
-            {
-                local = legacy;
-                migrated = true;
-                log.info("Choicer obtained migrate: imported {} items from ChanceMan", legacy.size());
-            }
-        }
-
         long localMtime = newFileExisted ? safeLastModified(newFile) : 0L;
-        if (migrated)
-        {
-            localMtime = System.currentTimeMillis();
-        }
 
         // LWW between local and (merged) cloud
         Set<Integer> winner;
@@ -462,31 +444,6 @@ public class ObtainedItemsManager
         }
         log.info("Choicer obtained readLocalJson: path={}, count={}", file, local.size());
         return local;
-    }
-
-    private boolean shouldMigrateLegacy(boolean localExists, Set<Integer> local, Set<Integer> cloud, long cloudTs)
-    {
-        return (!localExists || local.isEmpty())
-                && (cloud == null || cloud.isEmpty())
-                && cloudTs == 0L;
-    }
-
-    private Set<Integer> readLegacyJson(String player, String legacyFileName)
-    {
-        Set<Integer> legacy = new LinkedHashSet<>();
-        if (player == null || player.isEmpty()) return legacy;
-        Path legacyPath = RUNELITE_DIR.toPath().resolve(LEGACY_DIR).resolve(player).resolve(legacyFileName);
-        if (!Files.exists(legacyPath)) return legacy;
-        try (Reader r = Files.newBufferedReader(legacyPath))
-        {
-            Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
-            if (loaded != null) legacy.addAll(loaded);
-        }
-        catch (IOException e)
-        {
-            log.error("Error reading legacy ChanceMan JSON: {}", legacyPath, e);
-        }
-        return legacy;
     }
 
     private ConfigPersistence.StampedSet readCloud(String player, String key)

@@ -102,6 +102,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final int CHOICE_LABEL_RESERVED_HEIGHT = 34;
     private static final int CHOICE_ICON_TOP_PADDING = 8;
     private static final int CHOICE_BUTTON_Y_OFFSET = 12;
+    private static final int CHOICE_BANNER_GAP = 6;
+    private static final int CHOICE_BANNER_MIN_WIDTH = 220;
+    private static final int CHOICE_BANNER_MIN_HEIGHT = 14;
+    private static final float CHOICE_BANNER_MAX_WIDTH_RATIO = 0.92f;
+    private static final float CHOICE_BANNER_TARGET_HEIGHT_RATIO = 0.42f;
+    private static final int CHOICE_BANNER_MAX_HEIGHT = 56;
+    private static final String CHOICE_BANNER_PATH = "/com/choicer/choice_banner.png";
     private static final long PULSE_PERIOD_NS = 1_400_000_000L;
     private static final long SHIMMER_PERIOD_NS = 2_600_000_000L;
     private static final float PULSE_MIN_ALPHA = 0.07f;
@@ -159,6 +166,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private volatile List<Integer> resolveOptions = Collections.emptyList();
     private volatile int resolveSelectedIndex = -1;
     private volatile int resolveSelectedItemId = 0;
+    private BufferedImage choiceBannerImage;
 
     public void setChoicerOptions(List<Integer> options)
     {
@@ -505,7 +513,17 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int spacing = Math.max(14, Math.round(COLUMN_SPACING * slotScale));
         final int totalWidth = columnCount * slotWidth + (columnCount - 1) * spacing;
         final int slotsLeftX = centerX - ( totalWidth / 2 );
-        final int slotTopY = vpY + SELECTION_TOP_MARGIN + (clickableSelection ? CHOICE_BUTTON_Y_OFFSET : 0);
+        int slotTopY = vpY + SELECTION_TOP_MARGIN + (clickableSelection ? CHOICE_BUTTON_Y_OFFSET : 0);
+
+        Dimension bannerSize = null;
+        if (clickableSelection)
+        {
+            bannerSize = getChoiceBannerSize(totalWidth, slotHeight, vpWidth);
+            if (bannerSize != null && bannerSize.height > 0)
+            {
+                slotTopY += bannerSize.height + CHOICE_BANNER_GAP;
+            }
+        }
 
         final float middleIndex = (ICON_COUNT - 1) / 2f;
         final float scrollGap = SCROLL_ITEM_GAP;
@@ -680,6 +698,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         }
         else
         {
+            drawChoiceBanner(g, centerX, slotTopY, bannerSize);
             renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX);
         }
 
@@ -698,7 +717,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
         if (clickableSelection)
         {
-            return new Dimension(totalWidth, slotHeight);
+            int extraHeight = bannerSize != null ? bannerSize.height + CHOICE_BANNER_GAP : 0;
+            return new Dimension(totalWidth, slotHeight + extraHeight);
         }
         return null;
     }
@@ -749,7 +769,14 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int spacing = Math.max(14, COLUMN_SPACING);
         final int totalWidth = localColumnCount * slotWidth + (localColumnCount - 1) * spacing;
         final int slotsLeftX = centerX - ( totalWidth / 2 );
-        final int slotTopY = vpY + SELECTION_TOP_MARGIN + CHOICE_BUTTON_Y_OFFSET;
+        int slotTopY = vpY + SELECTION_TOP_MARGIN + CHOICE_BUTTON_Y_OFFSET;
+
+        Dimension bannerSize = getChoiceBannerSize(totalWidth, slotHeight, vpWidth);
+        if (bannerSize != null && bannerSize.height > 0)
+        {
+            slotTopY += bannerSize.height + CHOICE_BANNER_GAP;
+            drawChoiceBanner(g, centerX, slotTopY, bannerSize);
+        }
 
         final float scrollGap = SCROLL_ITEM_GAP;
         final float maxIconWidth = slotWidth - SLOT_PADDING_X * 2f;
@@ -862,7 +889,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             g.setComposite(oldComposite);
         }
 
-        return new Dimension(totalWidth, slotHeight);
+        int extraHeight = bannerSize != null ? bannerSize.height + CHOICE_BANNER_GAP : 0;
+        return new Dimension(totalWidth, slotHeight + extraHeight);
     }
 
     private float easeOutCubic(float t)
@@ -992,6 +1020,70 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     dimAlpha
             );
         }
+    }
+
+    private void drawChoiceBanner(Graphics2D g, int centerX, int topY, Dimension size)
+    {
+        BufferedImage banner = getChoiceBannerImage();
+        if (banner == null || size == null)
+        {
+            return;
+        }
+        int x = centerX - (size.width / 2);
+        int y = topY - CHOICE_BANNER_GAP - size.height;
+        g.drawImage(banner, x, y, size.width, size.height, null);
+    }
+
+    private Dimension getChoiceBannerSize(int totalWidth, int slotHeight, int viewportWidth)
+    {
+        BufferedImage banner = getChoiceBannerImage();
+        if (banner == null)
+        {
+            return null;
+        }
+
+        int bannerW = banner.getWidth();
+        int bannerH = banner.getHeight();
+        int maxWidth = Math.max(160, Math.round(totalWidth * CHOICE_BANNER_MAX_WIDTH_RATIO));
+        maxWidth = Math.min(maxWidth, viewportWidth - 12);
+        int targetHeight = Math.round(slotHeight * CHOICE_BANNER_TARGET_HEIGHT_RATIO);
+        targetHeight = Math.min(targetHeight, CHOICE_BANNER_MAX_HEIGHT);
+        float scale = targetHeight / (float) bannerH;
+        int targetWidth = Math.round(bannerW * scale);
+        if (targetWidth > maxWidth)
+        {
+            scale = maxWidth / (float) bannerW;
+            targetWidth = Math.round(bannerW * scale);
+            targetHeight = Math.round(bannerH * scale);
+        }
+
+        if (targetHeight < CHOICE_BANNER_MIN_HEIGHT || targetWidth < 60)
+        {
+            return null;
+        }
+
+        if (targetWidth < CHOICE_BANNER_MIN_WIDTH)
+        {
+            float minScale = CHOICE_BANNER_MIN_WIDTH / (float) bannerW;
+            int minWidth = Math.round(bannerW * minScale);
+            int minHeight = Math.round(bannerH * minScale);
+            if (minWidth <= maxWidth && minHeight <= Math.max(CHOICE_BANNER_MAX_HEIGHT, targetHeight))
+            {
+                targetWidth = minWidth;
+                targetHeight = minHeight;
+            }
+        }
+
+        return new Dimension(targetWidth, targetHeight);
+    }
+
+    private BufferedImage getChoiceBannerImage()
+    {
+        if (choiceBannerImage == null)
+        {
+            choiceBannerImage = ImageUtil.loadImageResource(getClass(), CHOICE_BANNER_PATH);
+        }
+        return choiceBannerImage;
     }
 
     private void drawChoiceButton(

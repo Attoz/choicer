@@ -94,8 +94,6 @@ public class ChoicerPlugin extends Plugin
     private volatile boolean ignoreNextInventoryScan = false;
     private boolean featuresActive = false;
     private boolean conflictWarned = false;
-    private static final int DATA_VERSION = 110;
-    private static final String DATA_VERSION_KEY_PREFIX = "dataVersion.";
 
     @Provides
     ChoicerConfig provideConfig(ConfigManager configManager)
@@ -160,7 +158,6 @@ public class ChoicerPlugin extends Plugin
 
             obtainedItemsManager.loadObtainedItems();
             rolledItemsManager.loadRolledItems();
-            maybeResetFor110(player, hadChoicerData);
             dataLoaded = true;
             ignoreNextInventoryScan = true;
         }
@@ -429,7 +426,6 @@ public class ChoicerPlugin extends Plugin
         boolean hadChoicerData = hasChoicerData(player);
         obtainedItemsManager.loadObtainedItems();
         rolledItemsManager.loadRolledItems();
-        maybeResetFor110(player, hadChoicerData);
         dataLoaded = true;
         ignoreNextInventoryScan = true;
 
@@ -614,8 +610,7 @@ public class ChoicerPlugin extends Plugin
     {
         if (conflictWarned) return;
         conflictWarned = true;
-        String msg = "Choicer is installed but inactive because ChanceMan is enabled. Disable ChanceMan to use " +
-                "Choicer. Your ChanceMan progress will be imported the first time Choicer runs.";
+        String msg = "Choicer is installed but inactive because ChanceMan is enabled. Disable ChanceMan to use Choicer.";
         if (notifier != null)
         {
             notifier.notify(msg);
@@ -683,53 +678,6 @@ public class ChoicerPlugin extends Plugin
     public boolean isInPlay(int itemId)
     {
         return allTradeableItems.contains(itemId);
-    }
-
-    private void maybeResetFor110(String player, boolean hadChoicerData)
-    {
-        if (player == null || player.isEmpty()) return;
-
-        Integer stored = null;
-        try
-        {
-            stored = configManager.getConfiguration("choicer", dataVersionKey(player), Integer.class);
-        }
-        catch (Exception ignored) { }
-
-        if (stored != null && stored >= DATA_VERSION) return;
-
-        if (hadChoicerData)
-        {
-            boolean hasData = !obtainedItemsManager.getObtainedItems().isEmpty()
-                    || !rolledItemsManager.getRolledItems().isEmpty();
-            if (hasData)
-            {
-                String msg = "Choicer 1.1.0 reset: previous Choicer progress has been cleared for compatibility.";
-                if (notifier != null)
-                {
-                    notifier.notify(msg);
-                }
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
-                        null,
-                        msg,
-                        "Choicer",
-                        JOptionPane.WARNING_MESSAGE
-                ));
-                obtainedItemsManager.clearAllForCurrentPlayer();
-                rolledItemsManager.clearAllForCurrentPlayer();
-            }
-        }
-
-        try
-        {
-            configManager.setConfiguration("choicer", dataVersionKey(player), DATA_VERSION);
-        }
-        catch (Exception ignored) { }
-    }
-
-    private String dataVersionKey(String player)
-    {
-        return DATA_VERSION_KEY_PREFIX + player;
     }
 
     private boolean hasChoicerData(String player)

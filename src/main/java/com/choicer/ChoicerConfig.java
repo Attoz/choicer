@@ -19,7 +19,7 @@ public interface ChoicerConfig extends Config
     @ConfigSection(
             name = "Important",
             description = "Warning: Do not use ChanceMan and Choicer at the same time. If you are switching from " +
-                    "ChanceMan, disable it first. Choicer will import your ChanceMan progress the first time it runs.",
+                    "ChanceMan, disable it first.",
             position = 99
     )
     String importantSection = "important";

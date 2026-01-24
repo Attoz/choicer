@@ -76,8 +76,8 @@ public interface ChoicerConfig extends Config
 
     @ConfigItem(
             keyName = "requireRolledUnlockedForGe",
-            name = "GE Requires Rolled and Unlocked",
-            description = "Only allow Grand Exchange purchases once items are both rolled and unlocked.",
+            name = "GE Requires Obtained and Rolled",
+            description = "Only Allow Grand Exchange results for items that have been both obtained and rolled.",
             position = 8
     )
     default boolean requireRolledUnlockedForGe() { return true; }
@@ -108,18 +108,29 @@ public interface ChoicerConfig extends Config
     default boolean showGemDropTable() { return true; }
 
     @ConfigItem(
+            keyName = "showDropsAlwaysOpen",
+            name = "Show Drops Always Open",
+            description = "Keep the Show Drops view active when switching away from the Music tab. Use the close button to exit.",
+            position = 12
+    )
+    default boolean showDropsAlwaysOpen()
+    {
+        return false;
+    }
+
+    @ConfigItem(
             keyName = "deprioritizeLockedOptions",
             name = "Deprioritize Locked Menu Options",
             description = "Sorts locked menu options below the Walk Here option.",
-            position = 12
+            position = 13
     )
     default boolean deprioritizeLockedOptions() { return true; }
 
     @ConfigItem(
             keyName = "unlockedItemColor",
-            name = "Unlocked Item Color",
-            description = "Color of the unlocked item name in chat messages.",
-            position = 13
+            name = "Rolled Item Color",
+            description = "Color of the rolled (unlocked) item name in chat messages.",
+            position = 14
     )
     default Color unlockedItemColor()
     {
@@ -128,9 +139,9 @@ public interface ChoicerConfig extends Config
 
     @ConfigItem(
             keyName = "rolledItemColor",
-            name = "Rolled Item Color",
-            description = "Color of the item used to unlock another item.",
-            position = 14
+            name = "Obtained Item Color",
+            description = "Color of the obtained item name in chat messages.",
+            position = 15
     )
     default Color rolledItemColor()
     {
@@ -141,7 +152,7 @@ public interface ChoicerConfig extends Config
             keyName = "dimLockedItemsEnabled",
             name = "Dim locked items",
             description = "Dim any item icons that have not been unlocked.",
-            position = 15
+            position = 16
     )
     default boolean dimLockedItemsEnabled()
     {
@@ -164,7 +175,7 @@ public interface ChoicerConfig extends Config
             keyName = "dimLockedItemsOpacity",
             name = "Dim opacity",
             description = "0 = no dim (fully visible), 255 = fully transparent.",
-            position = 16
+            position = 17
     )
     default int dimLockedItemsOpacity()
     {

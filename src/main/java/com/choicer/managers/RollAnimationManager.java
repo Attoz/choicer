@@ -32,8 +32,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Manages the roll animation for unlocking items.
- * It processes roll requests asynchronously and handles the roll animation through the overlay.
+ * Manages the roll animation for rolling/unlocking items.
+ * Obtained items trigger rolls; rolled items become usable when also obtained.
  */
 @Singleton
 @Slf4j
@@ -42,18 +42,19 @@ public class RollAnimationManager
     @Inject private ItemManager itemManager;
     @Inject private Client client;
     @Inject private ClientThread clientThread;
-    @Inject private UnlockedItemsManager unlockedManager;
+    @Inject private RolledItemsManager rolledManager;
     @Inject private ChoicerOverlay choicerOverlay;
     @Inject private ChoicerConfig config;
     @Inject private AudioPlayer audioPlayer;
     @Inject private MouseManager mouseManager;
     @Setter private ChoicerPanel choicerPanel;
 
-    private HashSet<Integer> allTradeableItems;
+    private Set<Integer> allTradeableItems = Collections.emptySet();
     private volatile Set<Integer> strictlyTradeableItems = Collections.emptySet();
     private final Queue<Integer> rollQueue = new ConcurrentLinkedQueue<>();
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile boolean isRolling = false;
+    private volatile boolean tradeablesReady = false;
     private static final int SNAP_WINDOW_MS = 350;
     private static final String CONFIRM_SOUND_WAV = "/com/choicer/confirmation_002.wav";
     private static final String CONFIRM_SOUND_OGG = "/com/choicer/confirmation_002.ogg";
@@ -65,12 +66,13 @@ public class RollAnimationManager
     @Setter
     private volatile boolean manualRoll = false;
 
-    public synchronized void setAllTradeableItems(HashSet<Integer> allTradeableItems)
+    public synchronized void setAllTradeableItems(Set<Integer> allTradeableItems)
     {
         if (allTradeableItems == null || allTradeableItems.isEmpty())
         {
-            this.allTradeableItems = new HashSet<>();
+            this.allTradeableItems = Collections.emptySet();
             strictlyTradeableItems = Collections.emptySet();
+            tradeablesReady = false;
             return;
         }
         this.allTradeableItems = allTradeableItems;
@@ -85,6 +87,7 @@ public class RollAnimationManager
             }
         }
         strictlyTradeableItems = tradeableOnly;
+        tradeablesReady = !this.allTradeableItems.isEmpty();
     }
 
     /**
@@ -97,11 +100,20 @@ public class RollAnimationManager
         rollQueue.offer(itemId);
     }
 
+    public boolean hasTradeablesReady()
+    {
+        return tradeablesReady && allTradeableItems != null && !allTradeableItems.isEmpty();
+    }
+
     /**
      * Processes the roll queue by initiating a roll animation if not already rolling.
      */
     public void process()
     {
+        if (!hasTradeablesReady())
+        {
+            return;
+        }
         if (!isRolling && !rollQueue.isEmpty())
         {
             int queuedItemId = rollQueue.poll();
@@ -192,7 +204,7 @@ public class RollAnimationManager
 
             if (itemToUnlock != 0)
             {
-                unlockedManager.unlockItem(itemToUnlock);
+                rolledManager.markRolled(itemToUnlock);
             }
 
             final boolean wasManualRoll = isManualRoll();
@@ -201,23 +213,27 @@ public class RollAnimationManager
             final int choiceCount = choicerOptions.size();
             final int queuedId = queuedItemId;
             clientThread.invoke(() -> {
-                String unlockedTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce), config.unlockedItemColor());
+                String rolledTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce), config.unlockedItemColor());
                 String message;
                 if (wasManualRoll)
                 {
                     String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
                     message = announceChoicer
-                            ? "Choicer unlocked " + unlockedTag + " after " + pressTag + " presented "
+                            ? "Choicer rolled " + rolledTag + " after " + pressTag + " presented "
                             + choiceCount + " choices."
-                            : "Unlocked " + unlockedTag + " by " + pressTag;
+                            : "Rolled " + rolledTag + " by " + pressTag;
+                }
+                else if (queuedId > 0)
+                {
+                    String obtainedTag = ColorUtil.wrapWithColorTag(getItemName(queuedId), config.rolledItemColor());
+                    message = announceChoicer
+                            ? "Choicer rolled " + rolledTag + " after obtaining " + obtainedTag + " presented "
+                            + choiceCount + " choices."
+                            : "Rolled " + rolledTag + " by obtaining " + obtainedTag;
                 }
                 else
                 {
-                    String rolledTag = ColorUtil.wrapWithColorTag(getItemName(queuedId), config.rolledItemColor());
-                    message = announceChoicer
-                            ? "Choicer unlocked " + unlockedTag + " after rolling " + choiceCount
-                            + " choices (first was " + rolledTag + ")."
-                            : "Unlocked " + unlockedTag + " by rolling " + rolledTag;
+                    message = "Rolled " + rolledTag;
                 }
                 client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
                 if (choicerPanel != null) {
@@ -260,7 +276,7 @@ public class RollAnimationManager
         List<Integer> locked = new ArrayList<>();
         for (int id : allTradeableItems)
         {
-            if (!unlockedManager.isUnlocked(id))
+            if (!rolledManager.isRolled(id))
             {
                 locked.add(id);
             }
@@ -308,14 +324,14 @@ public class RollAnimationManager
         executor.shutdownNow();
     }
 
-    private List<Integer> buildChoicerOptions(int guaranteedItemId)
+    private List<Integer> buildChoicerOptions(int obtainedItemId)
     {
         int target = Math.max(2, Math.min(5, config.choicerOptionCount()));
         LinkedHashSet<Integer> options = new LinkedHashSet<>();
-        boolean hasTradeableOption = isTradeableItem(guaranteedItemId);
-        if (guaranteedItemId != 0)
+        boolean hasTradeableOption = isTradeableItem(obtainedItemId);
+        if (obtainedItemId != 0 && !rolledManager.isRolled(obtainedItemId))
         {
-            options.add(guaranteedItemId);
+            options.add(obtainedItemId);
         }
 
         int attemptsLeft = Math.max(target * 3, allTradeableItems != null ? allTradeableItems.size() : target * 3);

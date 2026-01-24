@@ -26,9 +26,14 @@ This fork exists to explore a **more player-driven and transparent progression m
 
 ## Overview
 
-**Choicer** locks items until they are explicitly unlocked through a roll-based choice system.
+**Choicer** separates item progression into two states:
 
-When a locked item is encountered for the first time, the plugin presents **multiple unlock options** and lets the player choose one.  
+- **Rolled** = unlocked/allowed to use
+- **Obtained** = actually acquired in-game
+
+An item is **usable only when it is both Rolled and Obtained**.
+
+When an item is obtained for the first time, the plugin presents **multiple roll options** and lets the player choose one to unlock.  
 Progress is tracked per character and persists across sessions and machines.
 
 ---
@@ -75,15 +80,14 @@ Progress is tracked per character and persists across sessions and machines.
 ---
 
 ### 📁 Progress Panels
-- **Rolled Items**
-  - Tracks items that triggered a roll
-- **Unlocked Items**
-  - Shows usable items
+- **Rolled Items** (unlocked/allowed)
+- **Obtained Items** (acquired in-game)
+- **Rolled, not Obtained**
+- **Usable** (Rolled + Obtained)
 - Features:
   - Newest items shown first
   - Search support
-  - View toggling
-  - Filter controls
+  - List-based filtering with tooltips
   - Discord link for support and discussion
 
 ---
@@ -145,8 +149,10 @@ Manual rolls are available if locked items remain.
 Progress is stored per character:
 
 ~/.runelite/choicer/<player_name>/
-├── choicer_unlocked.json
+├── choicer_obtained.json
 └── choicer_rolled.json
+
+Legacy ChanceMan files are migrated forward automatically.
 
 ---
 

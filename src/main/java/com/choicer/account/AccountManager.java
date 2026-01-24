@@ -1,7 +1,7 @@
 package com.choicer.account;
 
 import com.choicer.managers.RolledItemsManager;
-import com.choicer.managers.UnlockedItemsManager;
+import com.choicer.managers.ObtainedItemsManager;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.Client;
@@ -22,13 +22,11 @@ import javax.inject.Singleton;
 @Singleton
 public class AccountManager
 {
-
 	@Inject
 	private Client client;
 
 	@Inject
-	private UnlockedItemsManager unlockedItemsManager;
-
+	private ObtainedItemsManager obtainedItemsManager;
 	@Inject
 	private RolledItemsManager rolledItemsManager;
 

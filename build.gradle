@@ -30,8 +30,8 @@ dependencies {
 	testImplementation group: 'net.runelite', name:'jshell', version: runeLiteVersion
 }
 
-group = 'com.chanceman'
-version = '2.8.2'
+group = 'com.choicer'
+version = '1.1.0'
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
@@ -41,7 +41,7 @@ tasks.withType(JavaCompile).configureEach {
 tasks.register('shadowJar', Jar) {
 	dependsOn configurations.testRuntimeClasspath
 	manifest {
-		attributes('Main-Class': 'com.choicer.chanceman.ChoicemanPluginTest', 'Multi-Release': true)
+		attributes('Main-Class': 'com.choicer.ChoicerPluginTest', 'Multi-Release': true)
 	}
 
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE

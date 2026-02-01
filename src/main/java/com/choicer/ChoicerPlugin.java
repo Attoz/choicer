@@ -700,19 +700,23 @@ public class ChoicerPlugin extends Plugin
             if (desc != null)
             {
                 String name = desc.name();
-                if (name != null && name.toLowerCase().contains("chance"))
+                if (name != null)
                 {
-                    // Avoid self-match on Choicer
-                    if (!"Choicer".equalsIgnoreCase(name))
+                    String normalized = name.trim().toLowerCase();
+                    if ("chanceman".equals(normalized) || "chance man".equals(normalized))
                     {
                         return true;
                     }
                 }
             }
             String className = plugin.getClass().getName();
-            if (className != null && className.toLowerCase().contains("chanceman"))
+            if (className != null)
             {
-                return true;
+                String normalized = className.toLowerCase();
+                if (normalized.endsWith(".chancemanplugin") || normalized.contains(".chanceman."))
+                {
+                    return true;
+                }
             }
         }
         return false;

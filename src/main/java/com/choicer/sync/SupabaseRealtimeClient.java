@@ -42,10 +42,11 @@ public class SupabaseRealtimeClient
     private volatile UUID groupId;
     private volatile Runnable onGroupState;
     private volatile Runnable onMembers;
+    private volatile Runnable onRollEvents;
     private volatile long reconnectDelayMs = RECONNECT_BASE_MS;
     private volatile String accessToken;
 
-    public synchronized void start(UUID groupId, Runnable onGroupState, Runnable onMembers)
+    public synchronized void start(UUID groupId, Runnable onGroupState, Runnable onMembers, Runnable onRollEvents)
     {
         if (groupId == null)
         {
@@ -55,6 +56,7 @@ public class SupabaseRealtimeClient
         {
             this.onGroupState = onGroupState;
             this.onMembers = onMembers;
+            this.onRollEvents = onRollEvents;
             return;
         }
         if (running && this.groupId != null && !this.groupId.equals(groupId))
@@ -64,6 +66,7 @@ public class SupabaseRealtimeClient
         this.groupId = groupId;
         this.onGroupState = onGroupState;
         this.onMembers = onMembers;
+        this.onRollEvents = onRollEvents;
         if (scheduler == null)
         {
             scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -82,6 +85,7 @@ public class SupabaseRealtimeClient
         groupId = null;
         onGroupState = null;
         onMembers = null;
+        onRollEvents = null;
         closeSocket();
         if (scheduler != null)
         {
@@ -161,6 +165,7 @@ public class SupabaseRealtimeClient
         resetReconnectDelay();
         subscribeToTable("group_state");
         subscribeToTable("group_members");
+        subscribeToTable("group_roll_events");
         if (scheduler != null)
         {
             heartbeatTask = scheduler.scheduleAtFixedRate(this::sendHeartbeat, HEARTBEAT_MS, HEARTBEAT_MS, TimeUnit.MILLISECONDS);
@@ -251,6 +256,11 @@ public class SupabaseRealtimeClient
         else if ("group_members".equals(table))
         {
             Runnable cb = onMembers;
+            if (cb != null) cb.run();
+        }
+        else if ("group_roll_events".equals(table))
+        {
+            Runnable cb = onRollEvents;
             if (cb != null) cb.run();
         }
     }

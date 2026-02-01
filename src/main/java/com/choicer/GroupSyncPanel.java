@@ -216,7 +216,7 @@ public class GroupSyncPanel extends JPanel
                 if (value instanceof GroupMember)
                 {
                     GroupMember member = (GroupMember) value;
-                    String name = member.displayName != null ? member.displayName : shortUserId(member.userId);
+                    String name = resolveMemberName(member);
                     String role = member.role != null ? member.role : "member";
                     label.setText(name + " (" + role + ")");
                 }
@@ -353,6 +353,23 @@ public class GroupSyncPanel extends JPanel
         return raw.length() > 8 ? raw.substring(0, 8) : raw;
     }
 
+    private String resolveMemberName(GroupMember member)
+    {
+        if (member == null)
+        {
+            return "Unknown";
+        }
+        if (member.displayName != null)
+        {
+            String trimmed = member.displayName.trim();
+            if (!trimmed.isEmpty())
+            {
+                return trimmed;
+            }
+        }
+        return shortUserId(member.userId);
+    }
+
     private JPanel labelWithSpinner(String label, JSpinner spinner)
     {
         JPanel row = new JPanel();
@@ -438,7 +455,7 @@ public class GroupSyncPanel extends JPanel
             JOptionPane.showMessageDialog(this, "Select a member to kick.", "Kick Member", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        String label = member.displayName != null ? member.displayName : shortUserId(member.userId);
+        String label = resolveMemberName(member);
         int result = JOptionPane.showConfirmDialog(this, "Kick " + label + "?", "Kick Member", JOptionPane.YES_NO_OPTION);
         if (result != JOptionPane.YES_OPTION)
         {

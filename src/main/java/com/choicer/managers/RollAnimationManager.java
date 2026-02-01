@@ -4,6 +4,8 @@ import com.choicer.ChoicerConfig;
 import com.choicer.ChoicerOverlay;
 import com.choicer.ChoicerPanel;
 import com.choicer.RollOverlay;
+import com.choicer.sync.GroupRollEvent;
+import com.choicer.sync.GroupRollEventType;
 import com.choicer.sync.GroupSyncService;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,12 +27,16 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Manages the roll animation for rolling/unlocking items.
@@ -57,12 +63,16 @@ public class RollAnimationManager
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile boolean isRolling = false;
     private volatile boolean tradeablesReady = false;
+    private static final int ROLL_DURATION_MS = 3600;
     private static final int SNAP_WINDOW_MS = 350;
+    private static final long REMOTE_SELECTION_TIMEOUT_MS = 120_000L;
     private static final String CONFIRM_SOUND_WAV = "/com/choicer/confirmation_002.wav";
     private static final String CONFIRM_SOUND_OGG = "/com/choicer/confirmation_002.ogg";
     private final Random random = new Random();
     private volatile RollOverlay activeOverlayRef;
     private volatile boolean confirmationSoundUnavailable = false;
+    private final Map<String, CompletableFuture<Integer>> remoteSelectionFutures = new ConcurrentHashMap<>();
+    private final Map<String, Integer> pendingRemoteSelections = new ConcurrentHashMap<>();
 
     @Getter
     @Setter
@@ -124,6 +134,107 @@ public class RollAnimationManager
         }
     }
 
+    public void onGroupRollEvent(GroupRollEvent event)
+    {
+        if (event == null || event.type == null || event.rollId == null || event.rollId.trim().isEmpty())
+        {
+            return;
+        }
+        if (event.type == GroupRollEventType.STARTED)
+        {
+            announceRemoteRollStart(event);
+            if (isRolling)
+            {
+                return;
+            }
+            isRolling = true;
+            executor.submit(() -> performRemoteRoll(event));
+            return;
+        }
+        if (event.type == GroupRollEventType.SELECTED && event.selectedItemId != null && event.selectedItemId > 0)
+        {
+            pendingRemoteSelections.put(event.rollId, event.selectedItemId);
+            CompletableFuture<Integer> future = remoteSelectionFutures.get(event.rollId);
+            if (future != null && !future.isDone())
+            {
+                future.complete(event.selectedItemId);
+            }
+        }
+    }
+
+    private void performRemoteRoll(GroupRollEvent event)
+    {
+        String rollId = event.rollId;
+        int rollDuration = event.getRollDurationMsOrDefault(ROLL_DURATION_MS);
+        List<Integer> options = new ArrayList<>(event.getOptionsOrEmpty());
+        try
+        {
+            if (options.isEmpty())
+            {
+                options = buildChoicerOptions(event.triggerItemId != null ? event.triggerItemId : 0);
+            }
+            List<Integer> immutableOptions = Collections.unmodifiableList(options);
+            choicerOverlay.setChoicerOptions(immutableOptions);
+            activeOverlayRef = choicerOverlay;
+            choicerOverlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
+
+            long startedMs = event.startedAt != null ? event.startedAt.toEpochMilli() : System.currentTimeMillis();
+            long waitingAtMs = startedMs + rollDuration + SNAP_WINDOW_MS;
+            sleepQuietly(Math.max(0L, waitingAtMs - System.currentTimeMillis()));
+
+            choicerOverlay.setSelectionPending(true);
+            CompletableFuture<Integer> selectionFuture = new CompletableFuture<>();
+            remoteSelectionFutures.put(rollId, selectionFuture);
+            Integer pendingSelection = pendingRemoteSelections.remove(rollId);
+            if (pendingSelection != null && pendingSelection > 0)
+            {
+                selectionFuture.complete(pendingSelection);
+            }
+
+            int selectedItemId;
+            try
+            {
+                selectedItemId = selectionFuture.get(REMOTE_SELECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            }
+            catch (InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+                selectedItemId = choicerOverlay.getFinalItem();
+            }
+            catch (ExecutionException | TimeoutException e)
+            {
+                selectedItemId = choicerOverlay.getFinalItem();
+            }
+            finally
+            {
+                remoteSelectionFutures.remove(rollId);
+                pendingRemoteSelections.remove(rollId);
+                choicerOverlay.setSelectionPending(false);
+            }
+
+            if (selectedItemId > 0)
+            {
+                playConfirmationSound();
+                long resolveDelay = choicerOverlay.startSelectionResolveAnimation(selectedItemId);
+                sleepQuietly(resolveDelay);
+                announceRemoteSelection(event, selectedItemId, immutableOptions);
+            }
+            else
+            {
+                choicerOverlay.stopAnimation();
+            }
+        }
+        catch (Exception e)
+        {
+            log.debug("Choicer remote roll playback skipped", e);
+        }
+        finally
+        {
+            isRolling = false;
+            activeOverlayRef = null;
+        }
+    }
+
     /**
      * Performs the roll animation.
      * Now announces/unlocks as soon as the item is selected (after the snap),
@@ -131,13 +242,29 @@ public class RollAnimationManager
      */
     private void performRoll(int queuedItemId)
     {
+        final boolean wasManualRoll = isManualRoll();
+        final String rollId = UUID.randomUUID().toString();
+        final Instant rollStartedAt = Instant.now();
         try
         {
-        int rollDuration = 3600;
+            int rollDuration = ROLL_DURATION_MS;
             List<Integer> generated = buildChoicerOptions(queuedItemId);
             List<Integer> choicerOptions = Collections.unmodifiableList(generated);
             boolean choicerSelectionActive = !choicerOptions.isEmpty();
             choicerOverlay.setChoicerOptions(choicerOptions);
+
+            if (groupSyncService != null)
+            {
+                groupSyncService.postRollStarted(
+                        rollId,
+                        rollStartedAt,
+                        queuedItemId,
+                        choicerOptions,
+                        rollDuration,
+                        wasManualRoll
+                );
+            }
+            announceLocalRollStart(queuedItemId);
 
             activeOverlayRef = choicerOverlay;
             choicerOverlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
@@ -166,6 +293,16 @@ public class RollAnimationManager
                     choicerOverlay.setSelectionPending(false);
                 }
                 itemToUnlock = selected;
+                if (groupSyncService != null && itemToUnlock > 0)
+                {
+                    groupSyncService.postRollSelected(
+                            rollId,
+                            rollStartedAt,
+                            itemToUnlock,
+                            rollDuration,
+                            wasManualRoll
+                    );
+                }
                 long resolveDelay = choicerOverlay.startSelectionResolveAnimation(itemToUnlock);
                 if (resolveDelay > 0)
                 {
@@ -209,31 +346,31 @@ public class RollAnimationManager
                 rolledManager.markRolled(itemToUnlock);
                 if (groupSyncService != null)
                 {
-                    groupSyncService.postUnlock("rolled:item:" + itemToUnlock);
+                    groupSyncService.postRolledUnlockItem(itemToUnlock);
                 }
             }
 
-            final boolean wasManualRoll = isManualRoll();
             final int finalItemToAnnounce = itemToUnlock != 0 ? itemToUnlock : finalRolledItem;
             final boolean announceChoicer = choicerSelectionActive;
-            final int choiceCount = choicerOptions.size();
+            final List<Integer> choiceItems = choicerOptions;
             final int queuedId = queuedItemId;
             clientThread.invoke(() -> {
                 String playerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Player";
                 String rolledTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce), config.unlockedItemColor());
                 String playerTag = ColorUtil.wrapWithColorTag(playerName, config.rolledItemColor());
+                String optionsTag = buildChoiceListTag(choiceItems);
                 String message;
                 if (queuedId > 0)
                 {
                     String obtainedTag = ColorUtil.wrapWithColorTag(getItemName(queuedId), config.rolledItemColor());
                     message = announceChoicer
-                            ? playerTag + " chose " + rolledTag + " after obtaining " + obtainedTag + " (from " + choiceCount + " choices)."
+                            ? playerTag + " chose " + rolledTag + " from " + optionsTag + " after rolling for " + obtainedTag + "."
                             : playerTag + " chose " + rolledTag + " after obtaining " + obtainedTag + ".";
                 }
                 else
                 {
                     message = announceChoicer
-                            ? playerTag + " chose " + rolledTag + " (from " + choiceCount + " choices)."
+                            ? playerTag + " chose " + rolledTag + " from " + optionsTag + "."
                             : playerTag + " chose " + rolledTag + ".";
                 }
                 client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
@@ -481,6 +618,144 @@ public class RollAnimationManager
         finally
         {
             mouseManager.unregisterMouseListener(listener);
+        }
+    }
+
+    private void announceRemoteRollStart(GroupRollEvent event)
+    {
+        if (event == null)
+        {
+            return;
+        }
+        clientThread.invoke(() -> {
+            String actor = sanitizePlayerName(event.actorDisplayName, event.actorUserId);
+            String actorTag = ColorUtil.wrapWithColorTag(actor, config.rolledItemColor());
+            String triggerName = getItemName(event.triggerItemId != null ? event.triggerItemId : 0);
+            String message;
+            if (triggerName != null && !triggerName.isEmpty())
+            {
+                String triggerTag = ColorUtil.wrapWithColorTag(triggerName, config.unlockedItemColor());
+                message = actorTag + " is rolling because " + triggerTag + "...";
+            }
+            else
+            {
+                message = actorTag + " is rolling...";
+            }
+            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
+        });
+    }
+
+    private void announceLocalRollStart(int triggerItemId)
+    {
+        clientThread.invoke(() -> {
+            String playerName = client.getLocalPlayer() != null ? client.getLocalPlayer().getName() : "Player";
+            String actorTag = ColorUtil.wrapWithColorTag(playerName, config.rolledItemColor());
+            String triggerName = getItemName(triggerItemId);
+            String message;
+            if (triggerName != null && !triggerName.isEmpty())
+            {
+                String triggerTag = ColorUtil.wrapWithColorTag(triggerName, config.unlockedItemColor());
+                message = actorTag + " is rolling because " + triggerTag + "...";
+            }
+            else
+            {
+                message = actorTag + " is rolling...";
+            }
+            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
+        });
+    }
+
+    private void announceRemoteSelection(GroupRollEvent event, int selectedItemId, List<Integer> options)
+    {
+        if (selectedItemId <= 0)
+        {
+            return;
+        }
+        clientThread.invoke(() -> {
+            String actor = sanitizePlayerName(event != null ? event.actorDisplayName : null, event != null ? event.actorUserId : null);
+            String actorTag = ColorUtil.wrapWithColorTag(actor, config.rolledItemColor());
+            String itemTag = ColorUtil.wrapWithColorTag(getItemName(selectedItemId), config.unlockedItemColor());
+            String optionsTag = buildChoiceListTag(options);
+            String triggerName = event != null ? getItemName(event.triggerItemId != null ? event.triggerItemId : 0) : "";
+            String message;
+            if (!triggerName.isEmpty())
+            {
+                String triggerTag = ColorUtil.wrapWithColorTag(triggerName, config.rolledItemColor());
+                message = actorTag + " chose " + itemTag + " from " + optionsTag + " after rolling for " + triggerTag + ".";
+            }
+            else
+            {
+                message = actorTag + " chose " + itemTag + " from " + optionsTag + ".";
+            }
+            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
+            if (choicerPanel != null)
+            {
+                SwingUtilities.invokeLater(() -> choicerPanel.updatePanel());
+            }
+        });
+    }
+
+    private String buildChoiceListTag(List<Integer> options)
+    {
+        if (options == null || options.isEmpty())
+        {
+            return "(no options)";
+        }
+        List<String> names = new ArrayList<>();
+        for (Integer optionId : options)
+        {
+            if (optionId == null || optionId <= 0)
+            {
+                continue;
+            }
+            String name = getItemName(optionId);
+            if (name == null || name.isEmpty())
+            {
+                name = "Item " + optionId;
+            }
+            names.add(ColorUtil.wrapWithColorTag(name, config.unlockedItemColor()));
+        }
+        if (names.isEmpty())
+        {
+            return "(no options)";
+        }
+        return "(" + String.join(", ", names) + ")";
+    }
+
+    private String sanitizePlayerName(String displayName, String fallback)
+    {
+        if (displayName != null)
+        {
+            String trimmed = displayName.trim();
+            if (!trimmed.isEmpty())
+            {
+                return trimmed;
+            }
+        }
+        if (fallback != null)
+        {
+            String trimmed = fallback.trim();
+            if (!trimmed.isEmpty())
+            {
+                return trimmed;
+            }
+        }
+        return "Player";
+    }
+
+    private void sleepQuietly(long delayMs)
+    {
+        if (delayMs <= 0)
+        {
+            return;
+        }
+        try
+        {
+            Thread.sleep(delayMs);
+        }
+        catch (InterruptedException e)
+        {
+            Thread.currentThread().interrupt();
         }
     }
 

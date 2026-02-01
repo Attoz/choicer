@@ -189,6 +189,7 @@ public class ChoicerPlugin extends Plugin
         groupSyncService.setMembersListener(members ->
                 SwingUtilities.invokeLater(() -> choicerPanel.updateMembers(members))
         );
+        groupSyncService.setRollEventListener(rollAnimationManager::onGroupRollEvent);
         if (config.groupSyncEnabled())
         {
             groupSyncService.start();
@@ -267,6 +268,7 @@ public class ChoicerPlugin extends Plugin
         {
             groupSyncService.setStatusListener(null);
             groupSyncService.setMembersListener(null);
+            groupSyncService.setRollEventListener(null);
             groupSyncService.shutdown();
         }
         if (fileExecutor != null)
@@ -640,7 +642,7 @@ public class ChoicerPlugin extends Plugin
             obtainedItemsManager.markObtained(canonicalItemId);
             if (groupSyncService != null)
             {
-                groupSyncService.postUnlock("obtained:item:" + canonicalItemId);
+                groupSyncService.postObtainedUnlockItem(canonicalItemId);
             }
             rollAnimationManager.enqueueRoll(canonicalItemId);
             refreshDropsViewerIfOpen();
@@ -675,7 +677,7 @@ public class ChoicerPlugin extends Plugin
                     obtainedItemsManager.markObtained(canonicalId);
                     if (groupSyncService != null)
                     {
-                        groupSyncService.postUnlock("obtained:item:" + canonicalId);
+                        groupSyncService.postObtainedUnlockItem(canonicalId);
                     }
                     rollAnimationManager.enqueueRoll(canonicalId);
                     processed.add(canonicalId);

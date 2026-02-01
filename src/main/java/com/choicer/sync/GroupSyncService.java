@@ -13,7 +13,10 @@ import net.runelite.client.config.ConfigManager;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -37,6 +40,11 @@ public class GroupSyncService
     private static final String KEY_LAST_DISPLAY_NAME = "group_sync.last_display_name";
 
     private static final long POLL_INTERVAL_SECONDS = 5L;
+    private static final long DISPLAY_NAME_DB_VERIFY_INTERVAL_MS = 60_000L;
+    private static final int MAX_ROLL_EVENTS_FETCH = 50;
+    private static final int MAX_SEEN_ROLL_EVENT_IDS = 512;
+    private static final String UNLOCK_PREFIX_OBTAINED = "obtained:item:";
+    private static final String UNLOCK_PREFIX_ROLLED = "rolled:item:";
 
     @Inject private SupabaseApiClient apiClient;
     @Inject private SupabaseAuthService authService;
@@ -60,7 +68,12 @@ public class GroupSyncService
     private volatile boolean groupActive = false;
     private volatile java.util.List<GroupMember> members = java.util.Collections.emptyList();
     private volatile Consumer<java.util.List<GroupMember>> membersListener;
+    private volatile Consumer<GroupRollEvent> rollEventListener;
     private volatile long lastMembersFetchMs = 0L;
+    private volatile long lastDisplayNameDbCheckMs = 0L;
+    private volatile Instant lastRollEventAt = null;
+    private final Set<UUID> seenRollEventIds = new HashSet<>();
+    private final ArrayDeque<UUID> seenRollEventOrder = new ArrayDeque<>();
     private final AtomicInteger postFailures = new AtomicInteger(0);
     private volatile long nextPostAllowedMs = 0L;
 
@@ -131,6 +144,11 @@ public class GroupSyncService
         {
             listener.accept(members);
         }
+    }
+
+    public void setRollEventListener(Consumer<GroupRollEvent> listener)
+    {
+        this.rollEventListener = listener;
     }
 
     public java.util.List<GroupMember> getMembers()
@@ -295,14 +313,97 @@ public class GroupSyncService
         });
     }
 
+    public void postObtainedUnlockItem(int itemId)
+    {
+        postUnlock(buildUnlockKey(UNLOCK_PREFIX_OBTAINED, itemId));
+    }
+
+    public void postRolledUnlockItem(int itemId)
+    {
+        postUnlock(buildUnlockKey(UNLOCK_PREFIX_ROLLED, itemId));
+    }
+
     public void postUnlock(String unlockKey)
     {
         if (!isSyncEnabled()) return;
+        if (!isValidUnlockKey(unlockKey))
+        {
+            log.debug("Choicer group unlock skipped: invalid key {}", unlockKey);
+            return;
+        }
         UUID groupId = getStoredGroupId();
         if (groupId == null) return;
         if (ioExecutor == null) return;
         unlockQueue.enqueue(groupId, unlockKey, Instant.now());
         flushQueue();
+    }
+
+    public void postRollStarted(
+            String rollId,
+            Instant startedAt,
+            int triggerItemId,
+            java.util.List<Integer> options,
+            int rollDurationMs,
+            boolean manualRoll)
+    {
+        if (!isSyncEnabled()) return;
+        UUID groupId = getStoredGroupId();
+        if (groupId == null) return;
+        if (ioExecutor == null) return;
+        ioExecutor.submit(() -> {
+            try
+            {
+                if (!ensureAuthSessionOrReset()) return;
+                GroupRollEvent event = new GroupRollEvent();
+                event.groupId = groupId;
+                event.rollId = rollId;
+                event.type = GroupRollEventType.STARTED;
+                event.startedAt = startedAt;
+                event.triggerItemId = triggerItemId > 0 ? triggerItemId : null;
+                event.options = options != null ? new ArrayList<>(options) : Collections.emptyList();
+                event.rollDurationMs = rollDurationMs;
+                event.manualRoll = manualRoll;
+                event.actorDisplayName = getDisplayName();
+                apiClient.postRollEventSync(event);
+            }
+            catch (Exception e)
+            {
+                log.debug("Choicer group roll start post skipped: {}", errorMessage(e));
+            }
+        });
+    }
+
+    public void postRollSelected(String rollId, Instant startedAt, int selectedItemId, int rollDurationMs, boolean manualRoll)
+    {
+        if (!isSyncEnabled()) return;
+        UUID groupId = getStoredGroupId();
+        if (groupId == null) return;
+        if (ioExecutor == null) return;
+        ioExecutor.submit(() -> {
+            try
+            {
+                if (!ensureAuthSessionOrReset()) return;
+                GroupRollEvent event = new GroupRollEvent();
+                event.groupId = groupId;
+                event.rollId = rollId;
+                event.type = GroupRollEventType.SELECTED;
+                event.startedAt = startedAt;
+                event.selectedItemId = selectedItemId > 0 ? selectedItemId : null;
+                event.rollDurationMs = rollDurationMs;
+                event.manualRoll = manualRoll;
+                event.actorDisplayName = getDisplayName();
+                apiClient.postRollEventSync(event);
+            }
+            catch (Exception e)
+            {
+                log.debug("Choicer group roll select post skipped: {}", errorMessage(e));
+            }
+        });
+    }
+
+    public String getCurrentUserId()
+    {
+        return lastUserId;
     }
 
     public void refreshMembers()
@@ -333,6 +434,7 @@ public class GroupSyncService
             try
             {
                 if (!ensureAuthSessionOrReset()) return;
+                ensureDisplayNameSet();
                 java.util.List<GroupMember> list = apiClient.getGroupMembersSync(groupId);
                 updateMembers(list);
                 lastMembersFetchMs = System.currentTimeMillis();
@@ -371,13 +473,13 @@ public class GroupSyncService
             try
             {
                 if (!ensureAuthSessionOrReset()) return;
+                ensureDisplayNameSet();
                 java.util.List<GroupMember> list = apiClient.getGroupMembersSync(groupId);
                 updateMembers(list);
                 lastMembersFetchMs = System.currentTimeMillis();
-                if (list != null && !list.isEmpty())
-                {
-                    fetchAndApplyState(false);
-                }
+                // Always fetch state after login-triggered refresh so we can clear
+                // a stale "Waiting for login" status even when no member rows are returned.
+                fetchAndApplyState(false);
             }
             catch (Exception e)
             {
@@ -440,6 +542,7 @@ public class GroupSyncService
                 updateStatus("synced", "Synced (+" + merged + ")", groupId, lastSeenVersion, lastSync, true);
                 eventBus.post(new GroupStateUpdated(groupId, state.version, state.updatedAt));
                 refreshMembers();
+                fetchRollEvents(false);
                 startRealtimeIfReady();
             }
             catch (Exception e)
@@ -498,7 +601,15 @@ public class GroupSyncService
                     updateStatus("synced", "Synced (+" + merged + ")", groupId, lastSeenVersion, lastSync, true);
                     eventBus.post(new GroupStateUpdated(groupId, full.version, full.updatedAt));
                     refreshMembers();
+                    fetchRollEvents(false);
                     startRealtimeIfReady();
+                }
+                else if (isWaitingForLoginStatus())
+                {
+                    // Transition out of "Waiting for login" when auth+state read succeeds.
+                    groupActive = true;
+                    lastSync = Instant.now();
+                    updateStatus("synced", "Synced (+0)", groupId, lastSeenVersion, lastSync, true);
                 }
             }
             catch (Exception e)
@@ -512,6 +623,7 @@ public class GroupSyncService
             refreshMembers();
         }
 
+        fetchRollEvents(false);
         flushQueue();
     }
 
@@ -525,15 +637,41 @@ public class GroupSyncService
     {
         String displayName = getDisplayName();
         if (displayName == null) return;
+
+        UUID groupId = getStoredGroupId();
+        if (groupId == null)
+        {
+            return;
+        }
+
         String lastSent = configManager.getConfiguration(CFG_GROUP, KEY_LAST_DISPLAY_NAME);
-        if (displayName.equals(lastSent)) return;
+        boolean shouldUpdate = !displayName.equals(lastSent);
+
+        long now = System.currentTimeMillis();
+        if (!shouldUpdate && now - lastDisplayNameDbCheckMs >= DISPLAY_NAME_DB_VERIFY_INTERVAL_MS)
+        {
+            try
+            {
+                String dbName = apiClient.getGroupMemberDisplayNameSync(groupId);
+                shouldUpdate = dbName == null || !displayName.equals(dbName);
+            }
+            catch (Exception e)
+            {
+                log.debug("Choicer group: display_name DB check failed", e);
+            }
+            finally
+            {
+                lastDisplayNameDbCheckMs = now;
+            }
+        }
+
+        if (!shouldUpdate) return;
 
         try
         {
-            JsonObject body = new JsonObject();
-            body.addProperty("p_display_name", displayName);
-            apiClient.callRpcSync("set_display_name", body);
+            apiClient.setDisplayNameSync(displayName, groupId);
             configManager.setConfiguration(CFG_GROUP, KEY_LAST_DISPLAY_NAME, displayName);
+            lastDisplayNameDbCheckMs = System.currentTimeMillis();
         }
         catch (Exception e)
         {
@@ -757,6 +895,33 @@ public class GroupSyncService
         }
     }
 
+    private String buildUnlockKey(String prefix, int itemId)
+    {
+        if (itemId <= 0)
+        {
+            return null;
+        }
+        return prefix + itemId;
+    }
+
+    private boolean isValidUnlockKey(String unlockKey)
+    {
+        if (unlockKey == null)
+        {
+            return false;
+        }
+        String trimmed = unlockKey.trim();
+        if (trimmed.isEmpty())
+        {
+            return false;
+        }
+        if (!trimmed.startsWith(UNLOCK_PREFIX_OBTAINED) && !trimmed.startsWith(UNLOCK_PREFIX_ROLLED))
+        {
+            return false;
+        }
+        return parseUnlockKey(trimmed) != null;
+    }
+
     private UUID getStoredGroupId()
     {
         String raw = configManager.getConfiguration(CFG_GROUP, KEY_GROUP_ID);
@@ -778,6 +943,12 @@ public class GroupSyncService
         configManager.unsetConfiguration(CFG_GROUP, KEY_LAST_VERSION);
         configManager.unsetConfiguration(CFG_GROUP, KEY_JOIN_CODE);
         lastSeenVersion = 0L;
+        lastRollEventAt = null;
+        synchronized (seenRollEventIds)
+        {
+            seenRollEventIds.clear();
+            seenRollEventOrder.clear();
+        }
         groupActive = false;
         clearGroupLocalState();
         stopRealtime();
@@ -867,6 +1038,15 @@ public class GroupSyncService
         }
     }
 
+    private boolean isWaitingForLoginStatus()
+    {
+        GroupSyncStatus current = status;
+        return current != null
+                && "idle".equalsIgnoreCase(current.state)
+                && current.message != null
+                && current.message.toLowerCase().contains("waiting for login");
+    }
+
     private boolean isSyncEnabled()
     {
         String raw = configManager.getConfiguration(CFG_GROUP, GroupSyncConfigKeys.ENABLED);
@@ -897,6 +1077,10 @@ public class GroupSyncService
     private void updateMembers(java.util.List<GroupMember> list)
     {
         if (list == null) list = java.util.Collections.emptyList();
+        if (handleRemovedFromGroup(list))
+        {
+            list = java.util.Collections.emptyList();
+        }
         members = list;
         if (!list.isEmpty())
         {
@@ -907,6 +1091,33 @@ public class GroupSyncService
         {
             listener.accept(list);
         }
+    }
+
+    private boolean handleRemovedFromGroup(java.util.List<GroupMember> list)
+    {
+        UUID groupId = getStoredGroupId();
+        if (groupId == null) return false;
+        String userId = getStoredUserId();
+        if (userId == null || userId.isEmpty()) return false;
+        if (list == null || list.isEmpty()) return false;
+
+        boolean stillMember = false;
+        for (GroupMember member : list)
+        {
+            if (member == null || member.userId == null) continue;
+            if (userId.equals(member.userId.toString()))
+            {
+                stillMember = true;
+                break;
+            }
+        }
+        if (stillMember) return false;
+
+        clearGroup();
+        unlockQueue.clear();
+        stopPolling();
+        updateStatus("idle", "Removed from group", null, 0L, null, true);
+        return true;
     }
 
     private void updateStatus(String state, String message, UUID groupId, long version, Instant lastSync, boolean enabled)
@@ -931,7 +1142,8 @@ public class GroupSyncService
         ioExecutor.submit(() -> realtimeClient.start(
                 groupId,
                 () -> fetchAndApplyState(false),
-                this::refreshMembers
+                this::refreshMembers,
+                () -> fetchRollEvents(false)
         ));
     }
 
@@ -941,5 +1153,85 @@ public class GroupSyncService
         {
             realtimeClient.stop();
         }
+    }
+
+    private void fetchRollEvents(boolean includeOwn)
+    {
+        if (ioExecutor == null) return;
+        if (!isSyncEnabled()) return;
+        if (!isLoggedIn()) return;
+        UUID groupId = getStoredGroupId();
+        if (groupId == null) return;
+        ioExecutor.submit(() -> {
+            try
+            {
+                if (!ensureAuthSessionOrReset()) return;
+                java.util.List<GroupRollEvent> events = apiClient.getRollEventsSinceSync(groupId, lastRollEventAt, MAX_ROLL_EVENTS_FETCH);
+                if (events == null || events.isEmpty())
+                {
+                    return;
+                }
+                for (GroupRollEvent event : events)
+                {
+                    if (event == null)
+                    {
+                        continue;
+                    }
+                    if (event.createdAt != null && (lastRollEventAt == null || event.createdAt.isAfter(lastRollEventAt)))
+                    {
+                        lastRollEventAt = event.createdAt;
+                    }
+                    if (event.id != null && !markRollEventSeen(event.id))
+                    {
+                        continue;
+                    }
+                    if (!includeOwn && isOwnRollEvent(event))
+                    {
+                        continue;
+                    }
+                    Consumer<GroupRollEvent> listener = rollEventListener;
+                    if (listener != null)
+                    {
+                        listener.accept(event);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                log.debug("Choicer group roll fetch skipped: {}", errorMessage(e));
+            }
+        });
+    }
+
+    private boolean markRollEventSeen(UUID id)
+    {
+        synchronized (seenRollEventIds)
+        {
+            if (seenRollEventIds.contains(id))
+            {
+                return false;
+            }
+            seenRollEventIds.add(id);
+            seenRollEventOrder.addLast(id);
+            while (seenRollEventOrder.size() > MAX_SEEN_ROLL_EVENT_IDS)
+            {
+                UUID oldest = seenRollEventOrder.pollFirst();
+                if (oldest != null)
+                {
+                    seenRollEventIds.remove(oldest);
+                }
+            }
+            return true;
+        }
+    }
+
+    private boolean isOwnRollEvent(GroupRollEvent event)
+    {
+        if (event == null || event.actorUserId == null)
+        {
+            return false;
+        }
+        String current = getCurrentUserId();
+        return current != null && current.equals(event.actorUserId);
     }
 }

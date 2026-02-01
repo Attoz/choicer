@@ -15,6 +15,8 @@ import com.choicer.ui.MusicWidgetController;
 import com.choicer.ui.NpcSearchService;
 import com.choicer.ui.MusicSearchButton;
 import com.choicer.ui.ItemDimmerController;
+import com.choicer.sync.GroupSyncService;
+import com.choicer.sync.GroupSyncConfigKeys;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
@@ -83,6 +85,7 @@ public class ChoicerPlugin extends Plugin
     @Inject private MusicSearchButton musicSearchButton;
     @Inject private ItemDimmerController itemDimmerController;
     @Inject private Notifier notifier;
+    @Inject private GroupSyncService groupSyncService;
 
     private ChoicerPanel choicerPanel;
     private NavigationButton navButton;
@@ -126,6 +129,9 @@ public class ChoicerPlugin extends Plugin
         featuresActive = true;
         dataLoaded = false;
 
+        boolean groupEnabled = config.groupSyncEnabled();
+        configManager.setConfiguration(GroupSyncConfigKeys.GROUP, GroupSyncConfigKeys.ENABLED, String.valueOf(groupEnabled));
+
         getInjector().getInstance(ActionHandler.class).startUp();
         accountManager.init();
         dropFetcher.startUp();
@@ -155,12 +161,9 @@ public class ChoicerPlugin extends Plugin
             };
             obtainedItemsManager.setOnChange(refreshPanel);
             rolledItemsManager.setOnChange(refreshPanel);
-
-            obtainedItemsManager.loadObtainedItems();
-            rolledItemsManager.loadRolledItems();
-            dataLoaded = true;
-            ignoreNextInventoryScan = true;
         }
+
+        applyGroupSaveMode(config.groupSyncEnabled());
 
         itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
         itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
@@ -174,11 +177,27 @@ public class ChoicerPlugin extends Plugin
                 itemManager,
                 allTradeableItems,
                 clientThread,
-                rollAnimationManager
+                rollAnimationManager,
+                groupSyncService,
+                configManager
         );
         rollAnimationManager.setChoicerPanel(choicerPanel);
+        groupSyncService.setStatusListener(status ->
+                SwingUtilities.invokeLater(() -> choicerPanel.updateGroupSyncStatus(status))
+        );
+        groupSyncService.setMembersListener(members ->
+                SwingUtilities.invokeLater(() -> choicerPanel.updateMembers(members))
+        );
+        if (config.groupSyncEnabled())
+        {
+            groupSyncService.start();
+        }
 
-        SwingUtilities.invokeLater(choicerPanel::updatePanel);
+        SwingUtilities.invokeLater(() ->
+        {
+            choicerPanel.setGroupTabVisible(config.groupSyncEnabled());
+            choicerPanel.updatePanel();
+        });
 
         if (accountManager.ready())
         {
@@ -242,6 +261,12 @@ public class ChoicerPlugin extends Plugin
         if (rollAnimationManager != null)
         {
             rollAnimationManager.shutdown();
+        }
+        if (groupSyncService != null)
+        {
+            groupSyncService.setStatusListener(null);
+            groupSyncService.setMembersListener(null);
+            groupSyncService.shutdown();
         }
         if (fileExecutor != null)
         {
@@ -311,6 +336,37 @@ public class ChoicerPlugin extends Plugin
         if (!event.getGroup().equals("choicer")) return;
         switch (event.getKey())
         {
+            case "groupSyncEnabled":
+                boolean enabled = config.groupSyncEnabled();
+                configManager.setConfiguration(GroupSyncConfigKeys.GROUP, GroupSyncConfigKeys.ENABLED, String.valueOf(enabled));
+                if (enabled)
+                {
+                    applyGroupSaveMode(true);
+                }
+                if (groupSyncService != null)
+                {
+                    if (enabled)
+                    {
+                        groupSyncService.start();
+                    }
+                    groupSyncService.setSyncEnabled(enabled);
+                }
+                if (!enabled)
+                {
+                    applyGroupSaveMode(false);
+                }
+                if (choicerPanel != null)
+                {
+                    SwingUtilities.invokeLater(() ->
+                    {
+                        choicerPanel.setGroupTabVisible(enabled);
+                        if (enabled)
+                        {
+                            choicerPanel.selectGroupTab();
+                        }
+                    });
+                }
+                break;
             case "clearSaveCurrent":
                 if (config.clearSaveCurrent())
                 {
@@ -412,6 +468,45 @@ public class ChoicerPlugin extends Plugin
         });
     }
 
+    private void applyGroupSaveMode(boolean enabled)
+    {
+        obtainedItemsManager.setGroupMode(enabled);
+        rolledItemsManager.setGroupMode(enabled);
+        if (!accountManager.ready())
+        {
+            if (choicerPanel != null)
+            {
+                SwingUtilities.invokeLater(choicerPanel::updatePanel);
+            }
+            return;
+        }
+
+        try
+        {
+            obtainedItemsManager.stopWatching();
+            rolledItemsManager.stopWatching();
+        }
+        catch (Exception ignored) { }
+
+        obtainedItemsManager.loadObtainedItems();
+        rolledItemsManager.loadRolledItems();
+        dataLoaded = true;
+        ignoreNextInventoryScan = true;
+
+        if (choicerPanel != null)
+        {
+            SwingUtilities.invokeLater(choicerPanel::updatePanel);
+        }
+        refreshTradeableItems();
+        refreshDropsViewerIfOpen();
+
+        if (accountManager.ready())
+        {
+            obtainedItemsManager.startWatching();
+            rolledItemsManager.startWatching();
+        }
+    }
+
     @Subscribe
     private void onAccountChanged(AccountChanged event)
     {
@@ -437,6 +532,15 @@ public class ChoicerPlugin extends Plugin
 
         obtainedItemsManager.startWatching();
         rolledItemsManager.startWatching();
+    }
+
+    @Subscribe
+    public void onGameStateChanged(GameStateChanged event)
+    {
+        if (event.getGameState() == GameState.LOGGED_IN && groupSyncService != null)
+        {
+            groupSyncService.refreshMembersAndMaybeSync();
+        }
     }
 
     @Subscribe
@@ -525,6 +629,10 @@ public class ChoicerPlugin extends Plugin
         if (!obtainedItemsManager.isObtained(canonicalItemId))
         {
             obtainedItemsManager.markObtained(canonicalItemId);
+            if (groupSyncService != null)
+            {
+                groupSyncService.postUnlock("obtained:item:" + canonicalItemId);
+            }
             rollAnimationManager.enqueueRoll(canonicalItemId);
             refreshDropsViewerIfOpen();
         }
@@ -556,6 +664,10 @@ public class ChoicerPlugin extends Plugin
                 if (!processed.contains(canonicalId) && !obtainedItemsManager.isObtained(canonicalId))
                 {
                     obtainedItemsManager.markObtained(canonicalId);
+                    if (groupSyncService != null)
+                    {
+                        groupSyncService.postUnlock("obtained:item:" + canonicalId);
+                    }
                     rollAnimationManager.enqueueRoll(canonicalId);
                     processed.add(canonicalId);
                 }

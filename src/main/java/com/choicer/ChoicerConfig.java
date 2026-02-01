@@ -24,6 +24,7 @@ public interface ChoicerConfig extends Config
     )
     String importantSection = "important";
 
+
     @ConfigItem(
             keyName = "freeToPlay",
             name = "Free To Play Mode",
@@ -156,6 +157,15 @@ public interface ChoicerConfig extends Config
     default boolean deprioritizeLockedOptions() { return true; }
 
     @ConfigItem(
+            keyName = "groupSyncEnabled",
+            name = "Enable Group Sync",
+            description = "Show the Group tab and enable Supabase group sync features. Disabling pauses group sync without leaving.",
+            position = 20,
+            section = settingsSection
+    )
+    default boolean groupSyncEnabled() { return false; }
+
+    @ConfigItem(
             keyName = "unlockedItemColor",
             name = "Rolled Item Color",
             description = "Color of the rolled (unlocked) item name in chat messages.",
@@ -241,6 +251,7 @@ public interface ChoicerConfig extends Config
     {
         return 5;
     }
+
 
     @ConfigItem(
             keyName = "clearSaveCurrent",

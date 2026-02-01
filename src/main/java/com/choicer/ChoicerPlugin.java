@@ -15,6 +15,7 @@ import com.choicer.ui.MusicWidgetController;
 import com.choicer.ui.NpcSearchService;
 import com.choicer.ui.MusicSearchButton;
 import com.choicer.ui.ItemDimmerController;
+import com.choicer.sync.GroupStateUpdated;
 import com.choicer.sync.GroupSyncService;
 import com.choicer.sync.GroupSyncConfigKeys;
 import com.google.gson.Gson;
@@ -541,6 +542,14 @@ public class ChoicerPlugin extends Plugin
         {
             groupSyncService.refreshMembersAndMaybeSync();
         }
+    }
+
+    @Subscribe
+    public void onGroupStateUpdated(GroupStateUpdated event)
+    {
+        if (!featuresActive) return;
+        if (choicerPanel == null) return;
+        SwingUtilities.invokeLater(choicerPanel::updatePanel);
     }
 
     @Subscribe

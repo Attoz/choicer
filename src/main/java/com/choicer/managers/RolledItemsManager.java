@@ -25,8 +25,10 @@ import static net.runelite.client.RuneLite.RUNELITE_DIR;
 public class RolledItemsManager
 {
     private static final int MAX_BACKUPS = 10;
-    private static final String CFG_KEY = "rolled";
-    private static final String FILE_NAME = "choicer_rolled.json";
+    private static final String CFG_KEY_SOLO = "rolled";
+    private static final String CFG_KEY_GROUP = "group_rolled";
+    private static final String FILE_NAME_SOLO = "choicer_rolled.json";
+    private static final String FILE_NAME_GROUP = "choicer_group_rolled.json";
 
     private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
     private static final long CONFIG_DEBOUNCE_MS = 3000L;
@@ -50,6 +52,7 @@ public class RolledItemsManager
     private volatile boolean watcherRunning = false;
     private volatile long lastSelfWriteMs = 0L;
     private Thread watcherThread;
+    private volatile boolean groupMode = false;
     public boolean ready() { return accountManager.getPlayerName() != null; }
 
     public boolean isRolled(int itemId) { return rolledItems.contains(itemId); }
@@ -73,11 +76,35 @@ public class RolledItemsManager
         }
     }
 
+    /** Replace local rolled set with the provided snapshot and persist immediately. */
+    public void overwriteRolledItems(Set<Integer> snapshot, long stampMillis)
+    {
+        if (snapshot == null) snapshot = Collections.emptySet();
+        synchronized (rolledItems)
+        {
+            rolledItems.clear();
+            rolledItems.addAll(snapshot);
+        }
+        dirty = true;
+        safeNotifyChange();
+        saveInternal(stampMillis, false);
+    }
+
     /** Initial load + LWW reconciliation. */
     public void loadRolledItems()
     {
         reconcileWithCloud(false);
         safeNotifyChange();
+    }
+
+    public void setGroupMode(boolean enabled)
+    {
+        this.groupMode = enabled;
+    }
+
+    public boolean isGroupMode()
+    {
+        return groupMode;
     }
 
     /** Normal save: disk + debounced cloud with current time. */
@@ -101,14 +128,14 @@ public class RolledItemsManager
         }
         dirty = false;
 
-        log.info("Choicer rolled clear: player={}, localFile={}", player, FILE_NAME);
-        deleteLocalIfExists(FILE_NAME);
+        log.info("Choicer rolled clear: player={}, localFile={}", player, currentFileName());
+        deleteLocalIfExists(currentFileName());
 
         long now = System.currentTimeMillis();
         try
         {
             log.info("Choicer rolled clear: writing empty cloud set at ts={}", now);
-            configPersistence.writeStampedSet(player, CFG_KEY, Collections.emptySet(), now);
+            configPersistence.writeStampedSet(player, currentCfgKey(), Collections.emptySet(), now);
         }
         catch (Exception e)
         {
@@ -118,11 +145,32 @@ public class RolledItemsManager
         safeNotifyChange();
     }
 
+    /** Clear local rolled set and file only (no cloud changes). */
+    public void clearLocalForCurrentPlayer()
+    {
+        String player = accountManager.getPlayerName();
+        if (player == null || player.isEmpty())
+        {
+            return;
+        }
+
+        synchronized (rolledItems)
+        {
+            rolledItems.clear();
+        }
+        dirty = false;
+
+        log.info("Choicer rolled clear local: player={}, localFile={}", player, currentFileName());
+        deleteLocalIfExists(currentFileName());
+
+        safeNotifyChange();
+    }
+
     /** Start watching the JSON on a dedicated daemon thread. */
     public void startWatching()
     {
         if (watcherRunning) return;
-        Path file = safeGetFilePathOrNull(FILE_NAME);
+        Path file = safeGetFilePathOrNull(currentFileName());
         if (file == null) return;
 
         try
@@ -163,14 +211,14 @@ public class RolledItemsManager
     public void flushIfDirtyOnExit()
     {
         if (!dirty) return;
-        Path file = safeGetFilePathOrNull(FILE_NAME);
+        Path file = safeGetFilePathOrNull(currentFileName());
         if (file == null) return;
 
         try
         {
             rotateBackupIfExists(file);
             Set<Integer> snap = snapshotRolled();
-            writeJsonAtomic(file, snap);
+            writeJsonAtomic(file, snap, true);
             mirrorToCloud(System.currentTimeMillis(), false, snap);
             dirty = false;
         }
@@ -188,7 +236,7 @@ public class RolledItemsManager
     {
         String player = accountManager.getPlayerName();
         if (player == null) return;
-        Path newFile = safeGetFilePathOrNull(FILE_NAME);
+        Path newFile = safeGetFilePathOrNull(currentFileName());
         if (newFile == null) return;
 
         boolean newFileExisted = Files.exists(newFile);
@@ -205,7 +253,7 @@ public class RolledItemsManager
         }
 
         // Cloud: new only
-        ConfigPersistence.StampedSet cloudStampedNew = readCloud(player, CFG_KEY);
+        ConfigPersistence.StampedSet cloudStampedNew = readCloud(player, currentCfgKey());
         Set<Integer> cloudNew = new LinkedHashSet<>(cloudStampedNew.data);
         long cloudTs = cloudStampedNew.ts;
 
@@ -244,6 +292,7 @@ public class RolledItemsManager
             saveInternal(stamp, false); // bypass debounce during reconcile
         }
 
+        syncInactiveModeWithCloud(runtime);
         dirty = false;
     }
 
@@ -258,7 +307,7 @@ public class RolledItemsManager
 
         executor.submit(() ->
         {
-            Path file = safeGetFilePathOrNull(FILE_NAME);
+            Path file = safeGetFilePathOrNull(currentFileName());
             if (file == null)
             {
                 log.error("RolledItemsManager: file path unavailable; skipping save");
@@ -268,7 +317,7 @@ public class RolledItemsManager
             {
                 rotateBackupIfExists(file);
                 Set<Integer> snap = snapshotRolled();
-                writeJsonAtomic(file, snap);
+                writeJsonAtomic(file, snap, true);
                 mirrorToCloud(stampMillis, debounced, snap);
                 dirty = false;
             }
@@ -295,7 +344,7 @@ public class RolledItemsManager
         {
             try
             {
-                configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snap, stampMillis);
+                configPersistence.writeStampedSetIfNewer(player, currentCfgKey(), snap, stampMillis);
             }
             catch (Exception e)
             {
@@ -327,6 +376,16 @@ public class RolledItemsManager
             try { cb.run(); }
             catch (Throwable t) { log.error("onChange threw", t); }
         }
+    }
+
+    private String currentFileName()
+    {
+        return groupMode ? FILE_NAME_GROUP : FILE_NAME_SOLO;
+    }
+
+    private String currentCfgKey()
+    {
+        return groupMode ? CFG_KEY_GROUP : CFG_KEY_SOLO;
     }
 
     private Path getFilePath(String fileName) throws IOException
@@ -403,12 +462,15 @@ public class RolledItemsManager
     }
 
     /** Write JSON to .tmp and atomically replace the main file; mark self-write for watcher echo suppression. */
-    private void writeJsonAtomic(Path file, Set<Integer> data) throws IOException
+    private void writeJsonAtomic(Path file, Set<Integer> data, boolean markSelfWrite) throws IOException
     {
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
         try (BufferedWriter w = Files.newBufferedWriter(tmp)) { gson.toJson(data, w); }
         safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        lastSelfWriteMs = System.currentTimeMillis();
+        if (markSelfWrite)
+        {
+            lastSelfWriteMs = System.currentTimeMillis();
+        }
     }
 
     /** Move with fallback when ATOMIC_MOVE not supported. */
@@ -509,6 +571,64 @@ public class RolledItemsManager
         {
             closeWatchServiceQuietly();
             watcherRunning = false;
+        }
+    }
+
+    /**
+     * Keep the inactive save file (solo vs group) mirrored via RuneLite ConfigManager,
+     * without touching the active in-memory set.
+     */
+    private void syncInactiveModeWithCloud(boolean runtime)
+    {
+        String player = accountManager.getPlayerName();
+        if (player == null) return;
+
+        boolean inactiveIsGroup = !groupMode;
+        String fileName = inactiveIsGroup ? FILE_NAME_GROUP : FILE_NAME_SOLO;
+        String key = inactiveIsGroup ? CFG_KEY_GROUP : CFG_KEY_SOLO;
+
+        Path file = safeGetFilePathOrNull(fileName);
+        if (file == null) return;
+
+        boolean fileExists = Files.exists(file);
+        Set<Integer> localNew = readLocalJson(file);
+        Set<Integer> local = (!localNew.isEmpty() || fileExists) ? localNew : new LinkedHashSet<>();
+
+        ConfigPersistence.StampedSet cloudStamped = readCloud(player, key);
+        Set<Integer> cloud = new LinkedHashSet<>(cloudStamped.data);
+        long cloudTs = cloudStamped.ts;
+
+        long localMtime = fileExists ? safeLastModified(file) : 0L;
+
+        if (localMtime == 0L && cloudTs == 0L && local.isEmpty() && cloud.isEmpty())
+        {
+            return;
+        }
+
+        if (localMtime > cloudTs)
+        {
+            try
+            {
+                configPersistence.writeStampedSetIfNewer(player, key, local, localMtime);
+            }
+            catch (Exception e)
+            {
+                log.debug("Choicer rolled inactive sync: failed to mirror local -> cloud (runtime={})", runtime, e);
+            }
+            return;
+        }
+
+        if (cloudTs > localMtime || (!fileExists && !cloud.isEmpty()))
+        {
+            try
+            {
+                rotateBackupIfExists(file);
+                writeJsonAtomic(file, cloud, false);
+            }
+            catch (IOException e)
+            {
+                log.debug("Choicer rolled inactive sync: failed to mirror cloud -> local (runtime={})", runtime, e);
+            }
         }
     }
 

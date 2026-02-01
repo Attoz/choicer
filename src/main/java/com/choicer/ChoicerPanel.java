@@ -3,12 +3,15 @@ package com.choicer;
 import com.choicer.managers.ObtainedItemsManager;
 import com.choicer.managers.RollAnimationManager;
 import com.choicer.managers.RolledItemsManager;
+import com.choicer.sync.GroupSyncService;
+import com.choicer.sync.GroupSyncStatus;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.PluginPanel;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
+import net.runelite.client.config.ConfigManager;
 
 import javax.swing.*;
 import javax.swing.border.Border;
@@ -30,25 +33,25 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class ChoicerPanel extends PluginPanel
 {
-    private static final Color BG = new Color(34, 30, 23);
-    private static final Color PANEL_BG = new Color(44, 38, 28);
-    private static final Color PANEL_BG_ALT = new Color(50, 43, 32);
-    private static final Color PANEL_BORDER = new Color(92, 76, 52);
-    private static final Color ACCENT = new Color(201, 168, 92);
-    private static final Color TEXT = new Color(232, 217, 175);
-    private static final Color TEXT_MUTED = new Color(200, 186, 150);
-    private static final Color LIST_ROW_A = new Color(48, 42, 32);
-    private static final Color LIST_ROW_B = new Color(42, 36, 27);
-    private static final Color SELECTION = new Color(90, 75, 50);
-    private static final Color FIELD_BG = new Color(42, 36, 27);
-    private static final Color BUTTON_BG = new Color(60, 63, 65);
-    private static final Color BANNER_BG = new Color(54, 44, 30);
-    private static final Color BANNER_BORDER = new Color(140, 112, 64);
-    private static final Color BANNER_TEXT = new Color(232, 210, 160);
+    static final Color BG = new Color(34, 30, 23);
+    static final Color PANEL_BG = new Color(44, 38, 28);
+    static final Color PANEL_BG_ALT = new Color(50, 43, 32);
+    static final Color PANEL_BORDER = new Color(92, 76, 52);
+    static final Color ACCENT = new Color(201, 168, 92);
+    static final Color TEXT = new Color(232, 217, 175);
+    static final Color TEXT_MUTED = new Color(200, 186, 150);
+    static final Color LIST_ROW_A = new Color(48, 42, 32);
+    static final Color LIST_ROW_B = new Color(42, 36, 27);
+    static final Color SELECTION = new Color(90, 75, 50);
+    static final Color FIELD_BG = new Color(42, 36, 27);
+    static final Color BUTTON_BG = new Color(60, 63, 65);
+    static final Color BANNER_BG = new Color(54, 44, 30);
+    static final Color BANNER_BORDER = new Color(140, 112, 64);
+    static final Color BANNER_TEXT = new Color(232, 210, 160);
 
-    private static final Font TITLE_FONT = new Font("Georgia", Font.BOLD, 18);
-    private static final Font UI_FONT = new Font("Georgia", Font.PLAIN, 12);
-    private static final Font SMALL_FONT = new Font("Georgia", Font.PLAIN, 11);
+    static final Font TITLE_FONT = new Font("Georgia", Font.BOLD, 18);
+    static final Font UI_FONT = new Font("Georgia", Font.PLAIN, 12);
+    static final Font SMALL_FONT = new Font("Georgia", Font.PLAIN, 11);
 
     private enum ListMode
     {
@@ -86,6 +89,11 @@ public class ChoicerPanel extends PluginPanel
     private final HashSet<Integer> allTradeableItems;
     private final ClientThread clientThread;
     private final RollAnimationManager rollAnimationManager;
+    private final GroupSyncService groupSyncService;
+    private final ConfigManager configManager;
+    private JTabbedPane tabs;
+    private JPanel groupPanel;
+    private GroupSyncPanel groupSyncPanel;
 
     private final Map<Integer, ImageIcon> itemIconCache = new HashMap<>();
     private final Map<Integer, String> itemNameCache = new HashMap<>();
@@ -97,7 +105,6 @@ public class ChoicerPanel extends PluginPanel
     private final JTextField searchField = new JTextField();
     private final JLabel countLabel = new JLabel("Rolled: 0/0");
     private final JComboBox<ListMode> modeDropdown = new JComboBox<>(ListMode.values());
-
     private ListMode listMode = ListMode.ROLLED;
     private String searchText = "";
 
@@ -107,7 +114,9 @@ public class ChoicerPanel extends PluginPanel
             ItemManager itemManager,
             HashSet<Integer> allTradeableItems,
             ClientThread clientThread,
-            RollAnimationManager rollAnimationManager
+            RollAnimationManager rollAnimationManager,
+            GroupSyncService groupSyncService,
+            ConfigManager configManager
     )
     {
         this.obtainedItemsManager = obtainedItemsManager;
@@ -116,6 +125,8 @@ public class ChoicerPanel extends PluginPanel
         this.allTradeableItems = allTradeableItems;
         this.clientThread = clientThread;
         this.rollAnimationManager = rollAnimationManager;
+        this.groupSyncService = groupSyncService;
+        this.configManager = configManager;
         init();
     }
 
@@ -124,6 +135,22 @@ public class ChoicerPanel extends PluginPanel
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(12, 12, 12, 12));
         setBackground(BG);
+
+        tabs = new JTabbedPane();
+        tabs.addTab("Items", buildItemsPanel());
+        groupSyncPanel = new GroupSyncPanel(groupSyncService, configManager);
+        groupPanel = groupSyncPanel;
+        if (groupSyncPanel.isGroupSyncEnabledSetting())
+        {
+            tabs.addTab("Group", groupPanel);
+        }
+        add(tabs, BorderLayout.CENTER);
+    }
+
+    private JPanel buildItemsPanel()
+    {
+        JPanel container = new JPanel(new BorderLayout());
+        container.setOpaque(false);
 
         JPanel top = new JPanel();
         top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
@@ -135,9 +162,10 @@ public class ChoicerPanel extends PluginPanel
         top.add(buildFilterRow());
         top.add(Box.createVerticalStrut(8));
 
-        add(top, BorderLayout.NORTH);
-        add(buildCenter(), BorderLayout.CENTER);
-        add(buildBottom(), BorderLayout.SOUTH);
+        container.add(top, BorderLayout.NORTH);
+        container.add(buildCenter(), BorderLayout.CENTER);
+        container.add(buildBottom(), BorderLayout.SOUTH);
+        return container;
     }
 
     private JPanel buildHeaderPanel()
@@ -305,6 +333,50 @@ public class ChoicerPanel extends PluginPanel
         bottom.add(Box.createVerticalStrut(8));
         bottom.add(rollPanel);
         return bottom;
+    }
+
+    public void updateGroupSyncStatus(GroupSyncStatus status)
+    {
+        if (groupSyncPanel != null)
+        {
+            groupSyncPanel.updateGroupSyncStatus(status);
+        }
+    }
+
+    public void updateMembers(java.util.List<com.choicer.sync.GroupMember> list)
+    {
+        if (groupSyncPanel != null)
+        {
+            groupSyncPanel.updateMembers(list);
+        }
+    }
+
+    public void setGroupTabVisible(boolean enabled)
+    {
+        if (tabs == null || groupPanel == null) return;
+        int idx = tabs.indexOfComponent(groupPanel);
+        if (enabled && idx == -1)
+        {
+            tabs.addTab("Group", groupPanel);
+        }
+        else if (!enabled && idx != -1)
+        {
+            if (tabs.getSelectedIndex() == idx)
+            {
+                tabs.setSelectedIndex(0);
+            }
+            tabs.remove(idx);
+        }
+    }
+
+    public void selectGroupTab()
+    {
+        if (tabs == null || groupPanel == null) return;
+        int idx = tabs.indexOfComponent(groupPanel);
+        if (idx != -1)
+        {
+            tabs.setSelectedIndex(idx);
+        }
     }
 
     private void performManualRoll(java.awt.event.ActionEvent e)

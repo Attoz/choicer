@@ -36,7 +36,7 @@ public class GroupSyncService
     private static final String KEY_JOIN_CODE = GroupSyncConfigKeys.JOIN_CODE;
     private static final String KEY_LAST_DISPLAY_NAME = "group_sync.last_display_name";
 
-    private static final long POLL_INTERVAL_SECONDS = 45L;
+    private static final long POLL_INTERVAL_SECONDS = 5L;
 
     @Inject private SupabaseApiClient apiClient;
     @Inject private SupabaseAuthService authService;
@@ -283,7 +283,6 @@ public class GroupSyncService
             clearGroup();
             unlockQueue.clear();
             stopPolling();
-            clearGroupLocalState();
             updateStatus("idle", "Left group", null, 0L, null, true);
         });
     }
@@ -506,6 +505,12 @@ public class GroupSyncService
         flushQueue();
     }
 
+    private void requestImmediatePoll()
+    {
+        if (scheduler == null || !polling) return;
+        scheduler.schedule(this::pollOnce, 0L, TimeUnit.SECONDS);
+    }
+
     private void ensureDisplayNameSet()
     {
         String displayName = getDisplayName();
@@ -560,6 +565,7 @@ public class GroupSyncService
                     apiClient.postUnlockSync(event.groupId, event.eventId, event.unlockKey, event.clientTs);
                     unlockQueue.removeById(event.eventId);
                     postFailures.set(0);
+                    requestImmediatePoll();
                 }
                 catch (Exception e)
                 {
@@ -762,6 +768,7 @@ public class GroupSyncService
         configManager.unsetConfiguration(CFG_GROUP, KEY_JOIN_CODE);
         lastSeenVersion = 0L;
         groupActive = false;
+        clearGroupLocalState();
     }
 
     private UUID parseUuid(String raw)

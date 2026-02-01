@@ -128,6 +128,12 @@ public class ObtainedItemsManager
         log.info("Choicer obtained clear: player={}, localFile={}", player, currentFileName());
         deleteLocalIfExists(currentFileName());
 
+        if (groupMode)
+        {
+            safeNotifyChange();
+            return;
+        }
+
         long now = System.currentTimeMillis();
         try
         {
@@ -235,6 +241,21 @@ public class ObtainedItemsManager
         Path newFile = safeGetFilePathOrNull(currentFileName());
         if (newFile == null) return;
 
+        if (groupMode)
+        {
+            boolean newFileExisted = Files.exists(newFile);
+            Set<Integer> localNew = readLocalJson(newFile);
+            Set<Integer> local = (!localNew.isEmpty() || newFileExisted) ? localNew : new LinkedHashSet<>();
+            synchronized (obtainedItems)
+            {
+                obtainedItems.clear();
+                obtainedItems.addAll(local);
+            }
+            syncInactiveModeWithCloud(runtime);
+            dirty = false;
+            return;
+        }
+
         boolean newFileExisted = Files.exists(newFile);
 
         Set<Integer> localNew = readLocalJson(newFile);
@@ -327,6 +348,7 @@ public class ObtainedItemsManager
     /** Mirror to cloud, optionally debounced; uses provided snapshot to avoid re-locking. */
     private void mirrorToCloud(long stampMillis, boolean debounced, Set<Integer> snapshot)
     {
+        if (groupMode) return;
         long now = System.currentTimeMillis();
         if (debounced && (now - lastConfigWriteMs < CONFIG_DEBOUNCE_MS)) return;
         lastConfigWriteMs = now;
@@ -583,6 +605,7 @@ public class ObtainedItemsManager
         if (player == null) return;
 
         boolean inactiveIsGroup = !groupMode;
+        if (inactiveIsGroup) return;
         String fileName = inactiveIsGroup ? FILE_NAME_GROUP : FILE_NAME_SOLO;
         String key = inactiveIsGroup ? CFG_KEY_GROUP : CFG_KEY_SOLO;
 

@@ -4,6 +4,7 @@ import com.choicer.ChoicerConfig;
 import com.choicer.ChoicerOverlay;
 import com.choicer.ChoicerPanel;
 import com.choicer.RollOverlay;
+import com.choicer.sync.GroupSyncService;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,7 @@ public class RollAnimationManager
     @Inject private ChoicerConfig config;
     @Inject private AudioPlayer audioPlayer;
     @Inject private MouseManager mouseManager;
+    @Inject private GroupSyncService groupSyncService;
     @Setter private ChoicerPanel choicerPanel;
 
     private Set<Integer> allTradeableItems = Collections.emptySet();
@@ -205,6 +207,10 @@ public class RollAnimationManager
             if (itemToUnlock != 0)
             {
                 rolledManager.markRolled(itemToUnlock);
+                if (groupSyncService != null)
+                {
+                    groupSyncService.postUnlock("rolled:item:" + itemToUnlock);
+                }
             }
 
             final boolean wasManualRoll = isManualRoll();

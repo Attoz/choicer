@@ -154,6 +154,22 @@ Progress is stored per character:
 
 ---
 
+## Group Sync (Supabase)
+
+When enabled, the plugin can sync rolled unlocks with a Supabase-backed group.
+
+Stored locally:
+- Supabase access/refresh tokens
+- group_id, run_id, lastSeenVersion
+- last sent display name
+- queued unlock events (offline retry)
+
+Sent to backend:
+- Display name (via `set_display_name`)
+- Unlock events (via `post_unlock`)
+
+---
+
 ## Attribution & Licensing
 
 This project is based on **ChanceMan** by **ChunkyAtlas**  

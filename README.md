@@ -157,6 +157,8 @@ Progress is stored per character:
 ## Group Sync (Supabase)
 
 When enabled, the plugin can sync rolled unlocks with a Supabase-backed group.
+Realtime updates are delivered via Supabase Realtime (WebSocket) while Group Sync is enabled,
+with polling as a fallback.
 
 Stored locally:
 - Supabase access/refresh tokens

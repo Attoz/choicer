@@ -40,6 +40,7 @@ public class GroupSyncService
 
     @Inject private SupabaseApiClient apiClient;
     @Inject private SupabaseAuthService authService;
+    @Inject private SupabaseRealtimeClient realtimeClient;
     @Inject private UnlockQueue unlockQueue;
     @Inject private RolledItemsManager rolledItemsManager;
     @Inject private ObtainedItemsManager obtainedItemsManager;
@@ -89,6 +90,7 @@ public class GroupSyncService
             updateStatus("starting", "Starting group sync", null, lastSeenVersion, lastSync, true);
             fetchAndApplyState(false);
             startPolling();
+            startRealtimeIfReady();
             flushQueue();
         }
         else
@@ -100,6 +102,7 @@ public class GroupSyncService
     public void shutdown()
     {
         started = false;
+        stopRealtime();
         if (scheduler != null)
         {
             scheduler.shutdownNow();
@@ -154,11 +157,13 @@ public class GroupSyncService
             updateStatus("starting", "Starting group sync", null, lastSeenVersion, lastSync, true);
             fetchAndApplyState(false);
             startPolling();
+            startRealtimeIfReady();
             flushQueue();
         }
         else
         {
             unlockQueue.clear();
+            stopRealtime();
             stopPolling();
             updateStatus("disabled", "Sync disabled", null, 0L, null, false);
         }
@@ -200,6 +205,7 @@ public class GroupSyncService
                 fetchAndApplyState(true);
                 refreshMembers();
                 startPolling();
+                startRealtimeIfReady();
             }
             catch (Exception e)
             {
@@ -244,6 +250,7 @@ public class GroupSyncService
                 fetchAndApplyState(false);
                 refreshMembers();
                 startPolling();
+                startRealtimeIfReady();
                 if (onSuccess != null)
                 {
                     onSuccess.accept(result);
@@ -282,6 +289,7 @@ public class GroupSyncService
             }
             clearGroup();
             unlockQueue.clear();
+            stopRealtime();
             stopPolling();
             updateStatus("idle", "Left group", null, 0L, null, true);
         });
@@ -432,6 +440,7 @@ public class GroupSyncService
                 updateStatus("synced", "Synced (+" + merged + ")", groupId, lastSeenVersion, lastSync, true);
                 eventBus.post(new GroupStateUpdated(groupId, state.version, state.updatedAt));
                 refreshMembers();
+                startRealtimeIfReady();
             }
             catch (Exception e)
             {
@@ -489,6 +498,7 @@ public class GroupSyncService
                     updateStatus("synced", "Synced (+" + merged + ")", groupId, lastSeenVersion, lastSync, true);
                     eventBus.post(new GroupStateUpdated(groupId, full.version, full.updatedAt));
                     refreshMembers();
+                    startRealtimeIfReady();
                 }
             }
             catch (Exception e)
@@ -585,6 +595,7 @@ public class GroupSyncService
         if (!isNotAuthorized(e)) return false;
         clearGroup();
         unlockQueue.clear();
+        stopRealtime();
         stopPolling();
         updateMembers(java.util.Collections.emptyList());
         updateStatus("idle", "No group joined", null, 0L, null, true);
@@ -769,6 +780,7 @@ public class GroupSyncService
         lastSeenVersion = 0L;
         groupActive = false;
         clearGroupLocalState();
+        stopRealtime();
     }
 
     private UUID parseUuid(String raw)
@@ -905,6 +917,29 @@ public class GroupSyncService
         if (listener != null)
         {
             listener.accept(next);
+        }
+    }
+
+    private void startRealtimeIfReady()
+    {
+        if (realtimeClient == null) return;
+        if (!isSyncEnabled()) return;
+        if (!isLoggedIn()) return;
+        UUID groupId = getStoredGroupId();
+        if (groupId == null) return;
+        if (ioExecutor == null) return;
+        ioExecutor.submit(() -> realtimeClient.start(
+                groupId,
+                () -> fetchAndApplyState(false),
+                this::refreshMembers
+        ));
+    }
+
+    private void stopRealtime()
+    {
+        if (realtimeClient != null)
+        {
+            realtimeClient.stop();
         }
     }
 }

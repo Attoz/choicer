@@ -2,6 +2,7 @@ package com.choicer.managers;
 
 import com.choicer.ChoicerPanel;
 import com.choicer.ChoicerConfig;
+import com.choicer.ChoicerOverlay;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.ChatMessageType;

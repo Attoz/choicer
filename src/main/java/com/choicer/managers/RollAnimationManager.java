@@ -20,10 +20,7 @@ import net.runelite.client.util.ColorUtil;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.SwingUtilities;
-import javax.sound.sampled.LineUnavailableException;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.event.MouseEvent;
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -493,30 +490,29 @@ public class RollAnimationManager
         {
             return;
         }
-        try
+        float volumeDb = toDb(config.rollSoundVolume());
+        if (!playSoundResource(CONFIRM_SOUND_WAV, volumeDb) && !playSoundResource(CONFIRM_SOUND_OGG, volumeDb))
         {
-            float volumeDb = toDb(config.rollSoundVolume());
-            if (!playSoundResource(CONFIRM_SOUND_WAV, volumeDb) && !playSoundResource(CONFIRM_SOUND_OGG, volumeDb))
-            {
-                confirmationSoundUnavailable = true;
-            }
-        }
-        catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex)
-        {
-            log.warn("Choicer: failed to play confirmation sound", ex);
             confirmationSoundUnavailable = true;
         }
     }
 
     private boolean playSoundResource(String path, float volumeDb)
-            throws IOException, UnsupportedAudioFileException, LineUnavailableException
     {
         if (RollAnimationManager.class.getResource(path) == null)
         {
             return false;
         }
-        audioPlayer.play(RollAnimationManager.class, path, volumeDb);
-        return true;
+        try
+        {
+            audioPlayer.play(RollAnimationManager.class, path, volumeDb);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            log.warn("Choicer: failed to play confirmation sound resource {}", path, ex);
+            return false;
+        }
     }
 
     private static float toDb(int percent)

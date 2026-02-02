@@ -14,8 +14,6 @@ import net.runelite.client.util.ImageUtil;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.sound.sampled.LineUnavailableException;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Point2D;
@@ -347,7 +345,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             try {
                 float volumeDb = toDb(config.rollSoundVolume());
                 audioPlayer.play(ChoicerOverlay.class, "/com/choicer/tick.wav", volumeDb);
-            } catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex) {
+            } catch (IOException | RuntimeException ex) {
                 log.warn("Choicer: failed to play tick.wav", ex);
             }
         }

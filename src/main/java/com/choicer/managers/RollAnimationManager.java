@@ -20,8 +20,6 @@ import net.runelite.client.util.ColorUtil;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.SwingUtilities;
-import javax.sound.sampled.LineUnavailableException;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.*;
@@ -485,7 +483,7 @@ public class RollAnimationManager
                 confirmationSoundUnavailable = true;
             }
         }
-        catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex)
+        catch (IOException | RuntimeException ex)
         {
             log.warn("Choicer: failed to play confirmation sound", ex);
             confirmationSoundUnavailable = true;
@@ -493,7 +491,7 @@ public class RollAnimationManager
     }
 
     private boolean playSoundResource(String path, float volumeDb)
-            throws IOException, UnsupportedAudioFileException, LineUnavailableException
+            throws IOException
     {
         if (RollAnimationManager.class.getResource(path) == null)
         {

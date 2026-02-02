@@ -97,6 +97,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final Color CORNER_HIGHLIGHT = new Color(196, 146, 90, 235);
     private static final Color CORNER_SHADOW = new Color(18, 10, 6, 235);
     private static final Color CHOICE_BUTTON_SHADOW = new Color(0, 0, 0, 100);
+    private static final Color TOGGLE_BUTTON_FILL_TOP = new Color(70, 59, 41, 235);
+    private static final Color TOGGLE_BUTTON_FILL_BOTTOM = new Color(46, 39, 28, 235);
+    private static final Color TOGGLE_BUTTON_BORDER = new Color(182, 150, 106, 235);
+    private static final Color TOGGLE_BUTTON_BORDER_HOVER = new Color(222, 190, 132, 245);
+    private static final Color TOGGLE_BUTTON_TEXT = new Color(240, 226, 190);
+    private static final Font TOGGLE_BUTTON_FONT = new Font("SansSerif", Font.BOLD, 11);
     private static final Color TOOLTIP_TEXT = new Color(238, 224, 186);
     private static final int MIN_LABEL_FONT_SIZE = 9;
     private static final int CHOICE_LABEL_RESERVED_HEIGHT = 34;
@@ -155,7 +161,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private int winnerDelta = 0;
     private int columnCount = 2;
     private final List<Rectangle> columnHitboxes = new ArrayList<>();
+    private final Rectangle selectionToggleHitbox = new Rectangle();
     private volatile boolean selectionPending = false;
+    private volatile boolean selectionUiHidden = false;
+    private volatile String selectionOwnerLabel = null;
     private long selectionStartMs = 0L;
     private boolean impactSoundPlayed = false;
 
@@ -217,12 +226,43 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             {
                 columnHitboxes.clear();
             }
+            synchronized (selectionToggleHitbox)
+            {
+                selectionToggleHitbox.setBounds(0, 0, 0, 0);
+            }
+            selectionUiHidden = false;
+            selectionOwnerLabel = null;
         }
     }
 
     public boolean isSelectionPending()
     {
         return selectionPending;
+    }
+
+    public void setSelectionOwnerLabel(String label)
+    {
+        if (label == null)
+        {
+            selectionOwnerLabel = null;
+            return;
+        }
+        String trimmed = label.trim();
+        selectionOwnerLabel = trimmed.isEmpty() ? null : trimmed;
+    }
+
+    public void toggleSelectionUiHidden()
+    {
+        selectionUiHidden = !selectionUiHidden;
+    }
+
+    public boolean isSelectionToggleAt(int x, int y)
+    {
+        synchronized (selectionToggleHitbox)
+        {
+            return selectionToggleHitbox.width > 0 && selectionToggleHitbox.height > 0
+                    && selectionToggleHitbox.contains(x, y);
+        }
     }
 
     public long startSelectionResolveAnimation(int selectedItemId)
@@ -348,6 +388,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     public void startRollAnimation(int dummy, int rollDurationMs, Supplier<Integer> randomLockedItemSupplier)
     {
         setSelectionPending(false);
+        selectionUiHidden = false;
+        selectionOwnerLabel = null;
         resolveAnimating = false;
         resolveOptions = Collections.emptyList();
         resolveSelectedIndex = -1;
@@ -698,13 +740,31 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         else
         {
             drawChoiceBanner(g, centerX, slotTopY, bannerSize);
-            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX);
+            drawSelectionOwnerCaption(g, slotsLeftX, slotTopY, totalWidth);
+            if (selectionUiHidden)
+            {
+                synchronized (columnHitboxes)
+                {
+                    columnHitboxes.clear();
+                }
+                drawSelectionToggleButton(g, slotsLeftX, slotTopY, totalWidth, true);
+                drawSelectionHiddenChip(g, slotsLeftX, slotTopY, totalWidth);
+            }
+            else
+            {
+                renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX);
+                drawSelectionToggleButton(g, slotsLeftX, slotTopY, totalWidth, false);
+            }
         }
 
         g.setClip(oldClip);
 
         if (!clickableSelection)
         {
+            synchronized (selectionToggleHitbox)
+            {
+                selectionToggleHitbox.setBounds(0, 0, 0, 0);
+            }
             final int centerSlotY = Math.round(iconsTopYF + centerIndex * activeStep);
             for (int col = 0; col < columnCount; col++)
             {
@@ -1018,6 +1078,110 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     intensity,
                     dimAlpha
             );
+        }
+    }
+
+    private void drawSelectionHiddenChip(Graphics2D g, int leftX, int topY, int totalWidth)
+    {
+        String owner = selectionOwnerLabel;
+        String text = (owner == null || owner.isEmpty()) ? "Choices hidden" : owner + ": choices hidden";
+        Font oldFont = g.getFont();
+        Font chipFont = TOGGLE_BUTTON_FONT.deriveFont(Font.BOLD, 11f);
+        g.setFont(chipFont);
+        FontMetrics fm = g.getFontMetrics();
+        int w = Math.max(120, fm.stringWidth(text) + 18);
+        int h = 18;
+        int x = leftX + Math.max(0, (totalWidth - w) / 2);
+        int y = topY - h - 4;
+
+        RoundRectangle2D.Float chip = new RoundRectangle2D.Float(x, y, w, h, 10, 10);
+        Paint oldPaint = g.getPaint();
+        Stroke oldStroke = g.getStroke();
+        g.setPaint(new GradientPaint(
+                x, y, new Color(56, 48, 36, 225),
+                x, y + h, new Color(34, 28, 21, 225)
+        ));
+        g.fill(chip);
+        g.setColor(new Color(188, 158, 112, 220));
+        g.setStroke(new BasicStroke(1.8f));
+        g.draw(chip);
+        g.setPaint(oldPaint);
+        g.setStroke(oldStroke);
+
+        int textX = x + (w - fm.stringWidth(text)) / 2;
+        int textY = y + ((h - fm.getHeight()) / 2) + fm.getAscent();
+        g.setColor(new Color(226, 210, 176));
+        g.drawString(text, textX, textY);
+        g.setFont(oldFont);
+    }
+
+    private void drawSelectionOwnerCaption(Graphics2D g, int leftX, int topY, int totalWidth)
+    {
+        String owner = selectionOwnerLabel;
+        if (owner == null || owner.isEmpty())
+        {
+            return;
+        }
+        String text = owner + " is choosing";
+        Font oldFont = g.getFont();
+        g.setFont(TOGGLE_BUTTON_FONT);
+        FontMetrics fm = g.getFontMetrics();
+        int x = leftX + Math.max(0, (totalWidth - fm.stringWidth(text)) / 2);
+        int y = topY - 4;
+        g.setColor(new Color(226, 210, 176));
+        g.drawString(text, x, y);
+        g.setFont(oldFont);
+    }
+
+    private void drawSelectionToggleButton(Graphics2D g, int leftX, int topY, int totalWidth, boolean hidden)
+    {
+        String owner = selectionOwnerLabel;
+        final String label;
+        if (owner == null || owner.isEmpty())
+        {
+            label = hidden ? "Show Choices" : "Hide Choices";
+        }
+        else
+        {
+            label = hidden ? ("Show " + owner) : ("Hide " + owner);
+        }
+        Font oldFont = g.getFont();
+        g.setFont(TOGGLE_BUTTON_FONT);
+        FontMetrics fm = g.getFontMetrics();
+        int w = Math.max(108, fm.stringWidth(label) + 18);
+        int h = 20;
+        int x = leftX + totalWidth - w - 6;
+        int y = topY - h - 2;
+        Point mouse = client.getMouseCanvasPosition();
+        boolean hovered = mouse != null && x <= mouse.getX() && mouse.getX() <= (x + w)
+                && y <= mouse.getY() && mouse.getY() <= (y + h);
+
+        RoundRectangle2D.Float shape = new RoundRectangle2D.Float(x, y, w, h, 10, 10);
+        Paint oldPaint = g.getPaint();
+        Stroke oldStroke = g.getStroke();
+        GradientPaint fill = new GradientPaint(
+                x, y,
+                hovered ? blendColors(TOGGLE_BUTTON_FILL_TOP, Color.WHITE, 0.14f) : TOGGLE_BUTTON_FILL_TOP,
+                x, y + h,
+                hovered ? blendColors(TOGGLE_BUTTON_FILL_BOTTOM, Color.WHITE, 0.12f) : TOGGLE_BUTTON_FILL_BOTTOM
+        );
+        g.setPaint(fill);
+        g.fill(shape);
+        g.setColor(hovered ? TOGGLE_BUTTON_BORDER_HOVER : TOGGLE_BUTTON_BORDER);
+        g.setStroke(new BasicStroke(2f));
+        g.draw(shape);
+        g.setPaint(oldPaint);
+        g.setStroke(oldStroke);
+
+        int textX = x + (w - fm.stringWidth(label)) / 2;
+        int textY = y + ((h - fm.getHeight()) / 2) + fm.getAscent();
+        g.setColor(TOGGLE_BUTTON_TEXT);
+        g.drawString(label, textX, textY);
+        g.setFont(oldFont);
+
+        synchronized (selectionToggleHitbox)
+        {
+            selectionToggleHitbox.setBounds(x, y, w, h);
         }
     }
 
@@ -2023,6 +2187,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         @Override
         public void mouseClicked(MouseEvent e)
         {
+            if (selectionPending && isSelectionToggleAt(e.getX(), e.getY()))
+            {
+                toggleSelectionUiHidden();
+                e.consume();
+                return;
+            }
             if (selectionPending && getOptionAt(e.getX(), e.getY()) != null)
             {
                 e.consume();
@@ -2032,6 +2202,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         @Override
         public void mousePressed(MouseEvent e)
         {
+            if (selectionPending && isSelectionToggleAt(e.getX(), e.getY()))
+            {
+                e.consume();
+                return;
+            }
             if (selectionPending && getOptionAt(e.getX(), e.getY()) != null)
             {
                 e.consume();
@@ -2043,6 +2218,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         {
             if (!selectionPending)
             {
+                return;
+            }
+            if (isSelectionToggleAt(e.getX(), e.getY()))
+            {
+                toggleSelectionUiHidden();
+                e.consume();
                 return;
             }
 

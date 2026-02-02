@@ -138,7 +138,7 @@ public class ChoicerPanel extends PluginPanel
 
         tabs = new JTabbedPane();
         tabs.addTab("Items", buildItemsPanel());
-        groupSyncPanel = new GroupSyncPanel(groupSyncService, configManager);
+        groupSyncPanel = new GroupSyncPanel(groupSyncService, rollAnimationManager, configManager);
         groupPanel = groupSyncPanel;
         if (groupSyncPanel.isGroupSyncEnabledSetting())
         {

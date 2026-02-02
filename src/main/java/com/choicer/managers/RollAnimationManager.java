@@ -73,6 +73,53 @@ public class RollAnimationManager
     private volatile boolean confirmationSoundUnavailable = false;
     private final Map<String, CompletableFuture<Integer>> remoteSelectionFutures = new ConcurrentHashMap<>();
     private final Map<String, Integer> pendingRemoteSelections = new ConcurrentHashMap<>();
+    private final Object remoteSessionLock = new Object();
+    private final LinkedHashMap<String, RemoteRollSession> remoteSessions = new LinkedHashMap<>();
+    private final ArrayDeque<String> remoteStartQueue = new ArrayDeque<>();
+    private volatile String activeRemoteRollId = null;
+
+    public enum RemoteRollState
+    {
+        QUEUED,
+        ACTIVE,
+        HIDDEN,
+        RESOLVED
+    }
+
+    public static final class RemoteRollSummary
+    {
+        public final String rollId;
+        public final String actorName;
+        public final int triggerItemId;
+        public final String triggerItemName;
+        public final int optionCount;
+        public final RemoteRollState state;
+        public final boolean hasSelection;
+
+        private RemoteRollSummary(String rollId, String actorName, int triggerItemId, String triggerItemName, int optionCount, RemoteRollState state, boolean hasSelection)
+        {
+            this.rollId = rollId;
+            this.actorName = actorName;
+            this.triggerItemId = triggerItemId;
+            this.triggerItemName = triggerItemName;
+            this.optionCount = optionCount;
+            this.state = state;
+            this.hasSelection = hasSelection;
+        }
+    }
+
+    private static final class RemoteRollSession
+    {
+        private final GroupRollEvent startedEvent;
+        private volatile RemoteRollState state;
+        private volatile Integer selectedItemId;
+
+        private RemoteRollSession(GroupRollEvent startedEvent, RemoteRollState state)
+        {
+            this.startedEvent = startedEvent;
+            this.state = state;
+        }
+    }
 
     @Getter
     @Setter
@@ -134,6 +181,114 @@ public class RollAnimationManager
         }
     }
 
+    public List<RemoteRollSummary> getRemoteRollSummaries()
+    {
+        synchronized (remoteSessionLock)
+        {
+            List<RemoteRollSummary> rows = new ArrayList<>();
+            for (RemoteRollSession session : remoteSessions.values())
+            {
+                GroupRollEvent event = session.startedEvent;
+                int triggerItemId = event.triggerItemId != null ? event.triggerItemId : 0;
+                rows.add(new RemoteRollSummary(
+                        event.rollId,
+                        sanitizePlayerName(event.actorDisplayName, event.actorUserId),
+                        triggerItemId,
+                        getItemName(triggerItemId),
+                        event.getOptionsOrEmpty().size(),
+                        session.state,
+                        session.selectedItemId != null && session.selectedItemId > 0
+                ));
+            }
+            return rows;
+        }
+    }
+
+    public void hideRemoteRoll(String rollId)
+    {
+        if (rollId == null || rollId.trim().isEmpty())
+        {
+            return;
+        }
+        synchronized (remoteSessionLock)
+        {
+            RemoteRollSession session = remoteSessions.get(rollId);
+            if (session == null || session.state == RemoteRollState.RESOLVED)
+            {
+                return;
+            }
+            session.state = RemoteRollState.HIDDEN;
+        }
+        CompletableFuture<Integer> future = remoteSelectionFutures.get(rollId);
+        if (future != null && !future.isDone())
+        {
+            future.complete(0);
+        }
+    }
+
+    public void openRemoteRoll(String rollId)
+    {
+        if (rollId == null || rollId.trim().isEmpty())
+        {
+            return;
+        }
+        GroupRollEvent eventToStart = null;
+        synchronized (remoteSessionLock)
+        {
+            RemoteRollSession session = remoteSessions.get(rollId);
+            if (session == null || session.state == RemoteRollState.RESOLVED)
+            {
+                return;
+            }
+            if (session.state == RemoteRollState.ACTIVE)
+            {
+                return;
+            }
+            if (session.state == RemoteRollState.HIDDEN)
+            {
+                session.state = RemoteRollState.QUEUED;
+                remoteStartQueue.remove(rollId);
+                remoteStartQueue.addFirst(rollId);
+            }
+            if (!isRolling && rollQueue.isEmpty() && !remoteStartQueue.isEmpty() && rollId.equals(remoteStartQueue.peekFirst()))
+            {
+                eventToStart = remoteSessions.get(rollId).startedEvent;
+                remoteStartQueue.pollFirst();
+                session.state = RemoteRollState.ACTIVE;
+                activeRemoteRollId = rollId;
+                isRolling = true;
+            }
+        }
+        if (eventToStart != null)
+        {
+            GroupRollEvent event = eventToStart;
+            executor.submit(() -> performRemoteRoll(event));
+        }
+    }
+
+    public void dismissRemoteRoll(String rollId)
+    {
+        if (rollId == null || rollId.trim().isEmpty())
+        {
+            return;
+        }
+        synchronized (remoteSessionLock)
+        {
+            remoteSessions.remove(rollId);
+            remoteStartQueue.remove(rollId);
+            if (rollId.equals(activeRemoteRollId))
+            {
+                activeRemoteRollId = null;
+            }
+        }
+        CompletableFuture<Integer> future = remoteSelectionFutures.remove(rollId);
+        if (future != null && !future.isDone())
+        {
+            future.complete(0);
+        }
+        pendingRemoteSelections.remove(rollId);
+    }
+
     public void onGroupRollEvent(GroupRollEvent event)
     {
         if (event == null || event.type == null || event.rollId == null || event.rollId.trim().isEmpty())
@@ -143,16 +298,53 @@ public class RollAnimationManager
         if (event.type == GroupRollEventType.STARTED)
         {
             announceRemoteRollStart(event);
-            if (isRolling)
+            GroupRollEvent eventToStart = null;
+            synchronized (remoteSessionLock)
             {
-                return;
+                if (!remoteSessions.containsKey(event.rollId))
+                {
+                    remoteSessions.put(event.rollId, new RemoteRollSession(event, RemoteRollState.QUEUED));
+                }
+                RemoteRollSession session = remoteSessions.get(event.rollId);
+                if (session == null || session.state == RemoteRollState.RESOLVED)
+                {
+                    return;
+                }
+                if (isRolling || !rollQueue.isEmpty())
+                {
+                    session.state = RemoteRollState.QUEUED;
+                    if (!remoteStartQueue.contains(event.rollId))
+                    {
+                        remoteStartQueue.addLast(event.rollId);
+                    }
+                    return;
+                }
+                session.state = RemoteRollState.ACTIVE;
+                activeRemoteRollId = event.rollId;
+                isRolling = true;
+                eventToStart = session.startedEvent;
             }
-            isRolling = true;
-            executor.submit(() -> performRemoteRoll(event));
+            if (eventToStart != null)
+            {
+                GroupRollEvent active = eventToStart;
+                executor.submit(() -> performRemoteRoll(active));
+            }
             return;
         }
         if (event.type == GroupRollEventType.SELECTED && event.selectedItemId != null && event.selectedItemId > 0)
         {
+            synchronized (remoteSessionLock)
+            {
+                RemoteRollSession session = remoteSessions.get(event.rollId);
+                if (session != null)
+                {
+                    session.selectedItemId = event.selectedItemId;
+                    if (session.state != RemoteRollState.RESOLVED)
+                    {
+                        session.state = session.state == RemoteRollState.ACTIVE ? RemoteRollState.ACTIVE : session.state;
+                    }
+                }
+            }
             pendingRemoteSelections.put(event.rollId, event.selectedItemId);
             CompletableFuture<Integer> future = remoteSelectionFutures.get(event.rollId);
             if (future != null && !future.isDone())
@@ -177,6 +369,7 @@ public class RollAnimationManager
             choicerOverlay.setChoicerOptions(immutableOptions);
             activeOverlayRef = choicerOverlay;
             choicerOverlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
+            choicerOverlay.setSelectionOwnerLabel(sanitizePlayerName(event.actorDisplayName, event.actorUserId));
 
             long startedMs = event.startedAt != null ? event.startedAt.toEpochMilli() : System.currentTimeMillis();
             long waitingAtMs = startedMs + rollDuration + SNAP_WINDOW_MS;
@@ -190,6 +383,9 @@ public class RollAnimationManager
             {
                 selectionFuture.complete(pendingSelection);
             }
+
+            MouseAdapter viewerControlsListener = createSelectionUiMouseListener(null);
+            mouseManager.registerMouseListener(viewerControlsListener);
 
             int selectedItemId;
             try
@@ -207,6 +403,7 @@ public class RollAnimationManager
             }
             finally
             {
+                mouseManager.unregisterMouseListener(viewerControlsListener);
                 remoteSelectionFutures.remove(rollId);
                 pendingRemoteSelections.remove(rollId);
                 choicerOverlay.setSelectionPending(false);
@@ -218,10 +415,27 @@ public class RollAnimationManager
                 long resolveDelay = choicerOverlay.startSelectionResolveAnimation(selectedItemId);
                 sleepQuietly(resolveDelay);
                 announceRemoteSelection(event, selectedItemId, immutableOptions);
+                synchronized (remoteSessionLock)
+                {
+                    RemoteRollSession session = remoteSessions.get(rollId);
+                    if (session != null)
+                    {
+                        session.selectedItemId = selectedItemId;
+                        session.state = RemoteRollState.RESOLVED;
+                    }
+                }
             }
             else
             {
                 choicerOverlay.stopAnimation();
+                synchronized (remoteSessionLock)
+                {
+                    RemoteRollSession session = remoteSessions.get(rollId);
+                    if (session != null && session.state != RemoteRollState.RESOLVED)
+                    {
+                        session.state = RemoteRollState.HIDDEN;
+                    }
+                }
             }
         }
         catch (Exception e)
@@ -232,6 +446,14 @@ public class RollAnimationManager
         {
             isRolling = false;
             activeOverlayRef = null;
+            synchronized (remoteSessionLock)
+            {
+                if (rollId.equals(activeRemoteRollId))
+                {
+                    activeRemoteRollId = null;
+                }
+            }
+            startNextRemoteRollIfIdle();
         }
     }
 
@@ -268,6 +490,7 @@ public class RollAnimationManager
 
             activeOverlayRef = choicerOverlay;
             choicerOverlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
+            choicerOverlay.setSelectionOwnerLabel(getLocalPlayerName());
 
             try
             {
@@ -388,6 +611,7 @@ public class RollAnimationManager
             setManualRoll(false);
             isRolling = false;
             activeOverlayRef = null;
+            startNextRemoteRollIfIdle();
         }
     }
 
@@ -561,44 +785,7 @@ public class RollAnimationManager
             return options.get(0);
         }
         CompletableFuture<Integer> future = new CompletableFuture<>();
-        MouseAdapter listener = new MouseAdapter()
-        {
-            private Integer blockIfOverButton(MouseEvent e)
-            {
-                Integer hit = choicerOverlay.getOptionAt(e.getX(), e.getY());
-                if (hit != null)
-                {
-                    e.consume();
-                }
-                return hit;
-            }
-
-            @Override
-            public MouseEvent mousePressed(MouseEvent e)
-            {
-                blockIfOverButton(e);
-                return e;
-            }
-
-            @Override
-            public MouseEvent mouseClicked(MouseEvent e)
-            {
-                blockIfOverButton(e);
-                return e;
-            }
-
-            @Override
-            public MouseEvent mouseReleased(MouseEvent e)
-            {
-                Integer hit = blockIfOverButton(e);
-                if (hit != null)
-                {
-                    playConfirmationSound();
-                    future.complete(hit);
-                }
-                return e;
-            }
-        };
+        MouseAdapter listener = createSelectionUiMouseListener(future);
         // Register after any coordinate translators (eg. Stretched Mode) so click coords line up with overlays.
         mouseManager.registerMouseListener(listener);
         try
@@ -619,6 +806,54 @@ public class RollAnimationManager
         {
             mouseManager.unregisterMouseListener(listener);
         }
+    }
+
+    private MouseAdapter createSelectionUiMouseListener(CompletableFuture<Integer> selectionFuture)
+    {
+        return new MouseAdapter()
+        {
+            private Integer handleEvent(MouseEvent e)
+            {
+                if (choicerOverlay.isSelectionToggleAt(e.getX(), e.getY()))
+                {
+                    choicerOverlay.toggleSelectionUiHidden();
+                    e.consume();
+                    return null;
+                }
+                Integer hit = choicerOverlay.getOptionAt(e.getX(), e.getY());
+                if (hit != null)
+                {
+                    e.consume();
+                }
+                return hit;
+            }
+
+            @Override
+            public MouseEvent mousePressed(MouseEvent e)
+            {
+                handleEvent(e);
+                return e;
+            }
+
+            @Override
+            public MouseEvent mouseClicked(MouseEvent e)
+            {
+                handleEvent(e);
+                return e;
+            }
+
+            @Override
+            public MouseEvent mouseReleased(MouseEvent e)
+            {
+                Integer hit = handleEvent(e);
+                if (hit != null && selectionFuture != null && !selectionFuture.isDone())
+                {
+                    playConfirmationSound();
+                    selectionFuture.complete(hit);
+                }
+                return e;
+            }
+        };
     }
 
     private void announceRemoteRollStart(GroupRollEvent event)
@@ -743,6 +978,28 @@ public class RollAnimationManager
         return "Player";
     }
 
+    private String getLocalPlayerName()
+    {
+        try
+        {
+            if (client.getLocalPlayer() == null)
+            {
+                return "You";
+            }
+            String raw = client.getLocalPlayer().getName();
+            if (raw == null)
+            {
+                return "You";
+            }
+            String trimmed = raw.trim();
+            return trimmed.isEmpty() ? "You" : trimmed;
+        }
+        catch (Exception e)
+        {
+            return "You";
+        }
+    }
+
     private void sleepQuietly(long delayMs)
     {
         if (delayMs <= 0)
@@ -756,6 +1013,37 @@ public class RollAnimationManager
         catch (InterruptedException e)
         {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    private void startNextRemoteRollIfIdle()
+    {
+        if (isRolling || !rollQueue.isEmpty())
+        {
+            return;
+        }
+        GroupRollEvent next = null;
+        synchronized (remoteSessionLock)
+        {
+            while (!remoteStartQueue.isEmpty())
+            {
+                String nextId = remoteStartQueue.pollFirst();
+                RemoteRollSession session = remoteSessions.get(nextId);
+                if (session == null || session.state == RemoteRollState.RESOLVED || session.state == RemoteRollState.HIDDEN)
+                {
+                    continue;
+                }
+                session.state = RemoteRollState.ACTIVE;
+                activeRemoteRollId = nextId;
+                next = session.startedEvent;
+                isRolling = true;
+                break;
+            }
+        }
+        if (next != null)
+        {
+            GroupRollEvent event = next;
+            executor.submit(() -> performRemoteRoll(event));
         }
     }
 

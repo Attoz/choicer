@@ -1,5 +1,6 @@
 package com.choicer;
 
+import com.choicer.managers.RollAnimationManager;
 import com.choicer.sync.GroupMember;
 import com.choicer.sync.GroupSyncConfigKeys;
 import com.choicer.sync.GroupSyncService;
@@ -19,6 +20,7 @@ import static com.choicer.ChoicerPanel.*;
 public class GroupSyncPanel extends JPanel
 {
     private final GroupSyncService groupSyncService;
+    private final RollAnimationManager rollAnimationManager;
     private final ConfigManager configManager;
 
     private final JLabel syncStatusLabel = new JLabel("Sync: disabled");
@@ -27,6 +29,12 @@ public class GroupSyncPanel extends JPanel
     private final JList<GroupMember> membersList = new JList<>(membersModel);
     private final JButton refreshMembersButton = new JButton("Refresh members");
     private final JButton kickMemberButton = new JButton("Kick member");
+    private final DefaultListModel<RollAnimationManager.RemoteRollSummary> remoteRollModel = new DefaultListModel<>();
+    private final JList<RollAnimationManager.RemoteRollSummary> remoteRollList = new JList<>(remoteRollModel);
+    private final JLabel remoteRollsLabel = new JLabel("Remote rolls pending: 0");
+    private final JButton openRemoteRollButton = new JButton("Open");
+    private final JButton hideRemoteRollButton = new JButton("Hide");
+    private final JButton dismissRemoteRollButton = new JButton("Dismiss");
 
     private final JTextField joinCodeField = new JTextField();
     private final JTextField createNameField = new JTextField();
@@ -43,13 +51,16 @@ public class GroupSyncPanel extends JPanel
     private JPanel actionsRow;
     private JPanel membersHeaderRow;
     private JScrollPane membersScroll;
+    private JPanel remoteRollsHeaderRow;
+    private JScrollPane remoteRollsScroll;
     private JPanel createNameRow;
     private JPanel createMaxRow;
     private volatile boolean isOwner = false;
 
-    public GroupSyncPanel(GroupSyncService groupSyncService, ConfigManager configManager)
+    public GroupSyncPanel(GroupSyncService groupSyncService, RollAnimationManager rollAnimationManager, ConfigManager configManager)
     {
         this.groupSyncService = groupSyncService;
+        this.rollAnimationManager = rollAnimationManager;
         this.configManager = configManager;
         build();
     }
@@ -80,6 +91,7 @@ public class GroupSyncPanel extends JPanel
         }
         setOwnerUiVisible(isCurrentUserOwner(list));
         updateGroupUiState();
+        refreshRemoteRolls();
     }
 
     public boolean isGroupSyncEnabledSetting()
@@ -230,6 +242,46 @@ public class GroupSyncPanel extends JPanel
         membersScroll.setPreferredSize(new Dimension(0, 84));
         membersScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 84));
 
+        remoteRollList.setBackground(PANEL_BG_ALT);
+        remoteRollList.setForeground(TEXT);
+        remoteRollList.setFont(SMALL_FONT);
+        remoteRollList.setVisibleRowCount(4);
+        remoteRollList.setCellRenderer(new DefaultListCellRenderer()
+        {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus)
+            {
+                JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (isSelected)
+                {
+                    label.setBackground(SELECTION);
+                }
+                else
+                {
+                    label.setBackground(index % 2 == 0 ? LIST_ROW_A : LIST_ROW_B);
+                }
+                label.setForeground(TEXT);
+                if (value instanceof RollAnimationManager.RemoteRollSummary)
+                {
+                    RollAnimationManager.RemoteRollSummary row = (RollAnimationManager.RemoteRollSummary) value;
+                    String trigger = "manual";
+                    if (row.triggerItemId > 0)
+                    {
+                        String itemName = row.triggerItemName != null ? row.triggerItemName.trim() : "";
+                        trigger = itemName.isEmpty() ? ("item:" + row.triggerItemId) : itemName;
+                    }
+                    label.setText(row.actorName + " - " + row.state.name().toLowerCase() + " - " + trigger);
+                }
+                return label;
+            }
+        });
+
+        remoteRollsScroll = new JScrollPane(remoteRollList, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        remoteRollsScroll.getViewport().setBackground(PANEL_BG_ALT);
+        remoteRollsScroll.setBorder(new LineBorder(PANEL_BORDER));
+        remoteRollsScroll.setPreferredSize(new Dimension(0, 78));
+        remoteRollsScroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 78));
+
         refreshMembersButton.setText("Refresh");
         refreshMembersButton.setFocusPainted(false);
         refreshMembersButton.setBackground(BUTTON_BG);
@@ -244,6 +296,27 @@ public class GroupSyncPanel extends JPanel
         kickMemberButton.setFont(SMALL_FONT.deriveFont(Font.BOLD));
         kickMemberButton.setPreferredSize(new Dimension(120, 26));
         kickMemberButton.addActionListener(e -> kickSelectedMember());
+
+        openRemoteRollButton.setFocusPainted(false);
+        openRemoteRollButton.setBackground(BUTTON_BG);
+        openRemoteRollButton.setForeground(Color.WHITE);
+        openRemoteRollButton.setFont(SMALL_FONT.deriveFont(Font.BOLD));
+        openRemoteRollButton.setPreferredSize(new Dimension(78, 26));
+        openRemoteRollButton.addActionListener(e -> openSelectedRemoteRoll());
+
+        hideRemoteRollButton.setFocusPainted(false);
+        hideRemoteRollButton.setBackground(BUTTON_BG);
+        hideRemoteRollButton.setForeground(Color.WHITE);
+        hideRemoteRollButton.setFont(SMALL_FONT.deriveFont(Font.BOLD));
+        hideRemoteRollButton.setPreferredSize(new Dimension(78, 26));
+        hideRemoteRollButton.addActionListener(e -> hideSelectedRemoteRoll());
+
+        dismissRemoteRollButton.setFocusPainted(false);
+        dismissRemoteRollButton.setBackground(BUTTON_BG);
+        dismissRemoteRollButton.setForeground(Color.WHITE);
+        dismissRemoteRollButton.setFont(SMALL_FONT.deriveFont(Font.BOLD));
+        dismissRemoteRollButton.setPreferredSize(new Dimension(86, 26));
+        dismissRemoteRollButton.addActionListener(e -> dismissSelectedRemoteRoll());
 
         membersHeaderRow = new JPanel();
         membersHeaderRow.setOpaque(false);
@@ -262,6 +335,24 @@ public class GroupSyncPanel extends JPanel
         membersHeaderRow.add(Box.createVerticalStrut(4));
         membersHeaderRow.add(membersActions);
         membersHeaderRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        remoteRollsHeaderRow = new JPanel();
+        remoteRollsHeaderRow.setOpaque(false);
+        remoteRollsHeaderRow.setLayout(new BoxLayout(remoteRollsHeaderRow, BoxLayout.Y_AXIS));
+        remoteRollsLabel.setFont(SMALL_FONT.deriveFont(Font.BOLD));
+        remoteRollsLabel.setForeground(TEXT_MUTED);
+
+        JPanel remoteActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        remoteActions.setOpaque(false);
+        remoteActions.add(openRemoteRollButton);
+        remoteActions.add(hideRemoteRollButton);
+        remoteActions.add(dismissRemoteRollButton);
+        remoteActions.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        remoteRollsHeaderRow.add(remoteRollsLabel);
+        remoteRollsHeaderRow.add(Box.createVerticalStrut(4));
+        remoteRollsHeaderRow.add(remoteActions);
+        remoteRollsHeaderRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         joinSection = new JPanel(new GridBagLayout());
         joinSection.setOpaque(false);
@@ -316,10 +407,19 @@ public class GroupSyncPanel extends JPanel
         add(Box.createVerticalStrut(2));
         membersScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
         add(membersScroll);
+        add(Box.createVerticalStrut(4));
+        remoteRollsHeaderRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        add(remoteRollsHeaderRow);
+        add(Box.createVerticalStrut(2));
+        remoteRollsScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        add(remoteRollsScroll);
         add(Box.createVerticalGlue());
         add(Box.createVerticalStrut(6));
         setOwnerUiVisible(false);
         updateGroupUiState();
+        javax.swing.Timer remoteRollsTimer = new javax.swing.Timer(1000, e -> refreshRemoteRolls());
+        remoteRollsTimer.setRepeats(true);
+        remoteRollsTimer.start();
     }
 
     private JPanel labelWithField(String label, JComponent field)
@@ -464,6 +564,75 @@ public class GroupSyncPanel extends JPanel
         groupSyncService.kickMember(member.userId);
     }
 
+    private void openSelectedRemoteRoll()
+    {
+        RollAnimationManager.RemoteRollSummary selected = remoteRollList.getSelectedValue();
+        if (selected == null)
+        {
+            return;
+        }
+        rollAnimationManager.openRemoteRoll(selected.rollId);
+        refreshRemoteRolls();
+    }
+
+    private void hideSelectedRemoteRoll()
+    {
+        RollAnimationManager.RemoteRollSummary selected = remoteRollList.getSelectedValue();
+        if (selected == null)
+        {
+            return;
+        }
+        rollAnimationManager.hideRemoteRoll(selected.rollId);
+        refreshRemoteRolls();
+    }
+
+    private void dismissSelectedRemoteRoll()
+    {
+        RollAnimationManager.RemoteRollSummary selected = remoteRollList.getSelectedValue();
+        if (selected == null)
+        {
+            return;
+        }
+        rollAnimationManager.dismissRemoteRoll(selected.rollId);
+        refreshRemoteRolls();
+    }
+
+    private void refreshRemoteRolls()
+    {
+        java.util.List<RollAnimationManager.RemoteRollSummary> rows = rollAnimationManager.getRemoteRollSummaries();
+        String selectedRollId = null;
+        RollAnimationManager.RemoteRollSummary selected = remoteRollList.getSelectedValue();
+        if (selected != null)
+        {
+            selectedRollId = selected.rollId;
+        }
+        remoteRollModel.clear();
+        for (RollAnimationManager.RemoteRollSummary row : rows)
+        {
+            if (row.state == RollAnimationManager.RemoteRollState.RESOLVED)
+            {
+                continue;
+            }
+            remoteRollModel.addElement(row);
+        }
+        remoteRollsLabel.setText("Remote rolls pending: " + remoteRollModel.size());
+        if (selectedRollId != null)
+        {
+            for (int i = 0; i < remoteRollModel.size(); i++)
+            {
+                if (selectedRollId.equals(remoteRollModel.getElementAt(i).rollId))
+                {
+                    remoteRollList.setSelectedIndex(i);
+                    break;
+                }
+            }
+        }
+        boolean hasSelection = remoteRollList.getSelectedValue() != null;
+        openRemoteRollButton.setEnabled(hasSelection);
+        hideRemoteRollButton.setEnabled(hasSelection);
+        dismissRemoteRollButton.setEnabled(hasSelection);
+    }
+
     private boolean isCurrentUserOwner(java.util.List<GroupMember> list)
     {
         String userId = configManager.getConfiguration(GroupSyncConfigKeys.GROUP, "supabase.user_id");
@@ -502,6 +671,8 @@ public class GroupSyncPanel extends JPanel
         leaveButton.setVisible(joined);
         membersHeaderRow.setVisible(joined);
         membersScroll.setVisible(joined);
+        remoteRollsHeaderRow.setVisible(joined);
+        remoteRollsScroll.setVisible(joined);
         refreshMembersButton.setEnabled(joined);
         copyJoinCodeButton.setVisible(joined && isOwner);
         actionsRow.setVisible(joined);

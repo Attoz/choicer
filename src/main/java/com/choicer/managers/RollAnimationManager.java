@@ -21,7 +21,6 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import javax.swing.SwingUtilities;
 import java.awt.event.MouseEvent;
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -483,7 +482,7 @@ public class RollAnimationManager
                 confirmationSoundUnavailable = true;
             }
         }
-        catch (IOException | RuntimeException ex)
+        catch (Exception ex)
         {
             log.warn("Choicer: failed to play confirmation sound", ex);
             confirmationSoundUnavailable = true;
@@ -491,7 +490,7 @@ public class RollAnimationManager
     }
 
     private boolean playSoundResource(String path, float volumeDb)
-            throws IOException
+            throws Exception
     {
         if (RollAnimationManager.class.getResource(path) == null)
         {

@@ -19,7 +19,6 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
 import java.awt.LinearGradientPaint;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -345,7 +344,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             try {
                 float volumeDb = toDb(config.rollSoundVolume());
                 audioPlayer.play(ChoicerOverlay.class, "/com/choicer/tick.wav", volumeDb);
-            } catch (IOException | RuntimeException ex) {
+            } catch (Exception ex) {
                 log.warn("Choicer: failed to play tick.wav", ex);
             }
         }

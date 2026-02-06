@@ -1,116 +1,177 @@
 # Choicer
 
-All credits goes to ChunkyAtlas for the ChanceMan plugin. This plugin is forked from his original work, purely due to personal interest in enhancing the experience. Please note this is a modified version of the original plugin. Even these added features were originally his ideas!!!
+Choicer is a RuneLite plugin that adds structured randomness and progression to item acquisition in Old School RuneScape.
 
-Please check out his plugin at https://github.com/ChunkyAtlas/ChanceMan if you are interested in giving him a shoutout.
+This project is a **fork and substantial modification** of the original **ChanceMan** plugin by **ChunkyAtlas**, developed under the BSD 2-Clause License.  
+The original concept, groundwork, and much of the underlying logic originate from that project and are credited accordingly.
+https://github.com/ChunkyAtlas/chance-man
 
-I do not take credit for anything !
+---
 
-## Attribution
+## Project Background
 
-This plugin is based on the original **Chance Man** plugin by ChunkyAtlas,
-licensed under the BSD 2-Clause License.
+The original **ChanceMan** plugin introduced a system where the **first drop of an item would unlock a single random item**.  
+Choicer takes that foundation and deliberately changes the gameplay philosophy while preserving the proven technical core.
+
+### Key differences from the original project:
+- ❌ Removed single random unlocks  
+- ✅ Introduced **multiple-choice unlock rolls**
+- ✅ Retained core drop, loot, and persistence logic
+- ✅ Expanded the item pool to include **untradeable items**
+- ✅ Reworked UI and interaction flow
+
+This fork exists to explore a **more player-driven and transparent progression model**, while staying within RuneLite and Jagex rules.
+
+---
+
 ## Overview
 
-**Chance Man** is a RuneLite plugin that locks tradeable items until they are unlocked by a random roll. Designed for players who enjoy adding extra randomness or progression to their gameplay, Chance Man provides a unique system for “earning” items through luck. Items become accessible only after you roll to unlock them, with progress saved per player across sessions.
+**Choicer** locks items until they are explicitly unlocked through a roll-based choice system.
+
+When a locked item is encountered for the first time, the plugin presents **multiple unlock options** and lets the player choose one.  
+Progress is tracked per character and persists across sessions and machines.
+
+---
 
 ## Features
 
-- **Locking Mechanic**
-    - Tradeable items (excluding coins) start out locked.
-    - Items remain locked until you perform a successful roll to unlock them.
-    - Prevents locked items from being picked up, equipped, or otherwise used until they are rolled.
+### 🔒 Item Locking
+- Tradeable items (excluding coins) start locked by default
+- Untradeable items can also be included
+- Locked items cannot be:
+  - Picked up
+  - Equipped
+  - Used
+- Examine and drop remain available
 
-- **Rolling System**
-    - Roll animations determine which item gets unlocked.
-    - The final rolled item is announced via chat messages and automatically becomes unlocked.
-    - A dedicated panel button (“Roll”) lets you manually trigger a roll if you have locked items.
+---
 
-- **Ground Item & Inventory Detection**
-    - Automatically rolls when you encounter locked items on the ground or receive them in your inventory (e.g., quest rewards).
-    - Rolls each item only once, so repeated drops of the same item type won’t trigger multiple rolls.
+### 🎲 Choice-Based Rolling System
+- Rolls present **multiple unlock options**
+- Player selects which item to unlock
+- Roll results are announced in chat
+- Manual rolls available via the plugin panel
 
-- **Show Drops Menu**
-    - Right-click an NPC and choose **Show Drops** to fetch its drop table from the wiki.
-    - Use the search button in the Music tab to look up anything with a droptable, or NPC by name, level, or ID.
-    - The Music tab displays icons and a progress bar for the NPC's drops, and hovering an icon shows its name.
+---
 
-- **Rolled & Unlocked Panels**
-    - A **Rolled Items** section logs every item that has triggered a roll.
-    - An **Unlocked Items** section shows which items have been successfully unlocked.
-    - Both panels maintain descending order so the most recent items appear at the top.
-    - A search bar lets you quickly find items.
-    - The 🔄 button swaps between Rolled and Unlocked views.
-    - Filter toggles show only unlocked‑not‑rolled or both unlocked‑and‑rolled items.
-    - The Discord icon links to the community server for help and discussion and good vibes.
+### 📦 Drop & Inventory Detection
+- Automatically triggers rolls for:
+  - Ground drops
+  - Inventory additions (e.g. quest rewards)
+- Each item type rolls only once
+- Duplicate drops do not retrigger rolls
 
-- **Persistence**
-    - Each player’s rolled/unlocked data is stored locally in JSON files and mirrored to RuneLite’s cloud profile so progress syncs across machines.
-    - Data is automatically saved and loaded for each character name.
+---
 
-- **Grand Exchange Search Filtering**
-    - Locked items are hidden in GE search results and dimmed until you unlock them
+### 📊 Drop Table Integration
+- Right-click NPC → **Show Drops**
+- Fetches drop tables from the OSRS Wiki
+- Music tab search supports:
+  - NPC name
+  - NPC ID
+  - Combat level
+- Visual progress bars and hoverable item icons
 
-- **Locked Item Dimming**
-    - Locked item icons across interfaces are dimmed to clearly show they are unusable until rolled.
-    - The dimming strength is configurable in the plugin settings.
+---
 
-## Configuration
+### 📁 Progress Panels
+- **Rolled Items**
+  - Tracks items that triggered a roll
+- **Unlocked Items**
+  - Shows usable items
+- Features:
+  - Newest items shown first
+  - Search support
+  - View toggling
+  - Filter controls
+  - Discord link for support and discussion
 
-Open RuneLite’s plugin settings and select **ChanceMan** to adjust these options:
+---
 
-- **Free To Play Mode** – Only roll items available to F2P players.
-- **Include F2P trade-only items** – With F2P mode enabled, also roll items that normally require trading to obtain.
-- **Roll Item Sets** – Include item set pieces in the pool of rollable items.
-- **Roll Flatpacks** – Let flatpacks appear in rolls.
-- **Weapon Poison Unlock Requirements** – Require the base weapon and poison to be unlocked before poisoned variants can roll.
-- **Enable Roll Sounds** – Play sound effects during roll animations.
-- **GE Purchases Require Rolls** – Items appear purchasable on the Grand Exchange only after they have been rolled and unlocked.
-- **Unlocked Item Color** – Chat color for newly unlocked item names.
-- **Rolled Item Color** – Chat color for the item that triggered the unlock.
-- **Sort Drops by Rarity** – Order items in the Show Drops menu by rarity instead of item ID.
-- **Show Rare Drop Table** – Toggle to display items from the rare drop table in the **Show Drops** menu.
-- **Show Gem Drop Table** – Toggle to display items from the gem drop table in the **Show Drops** menu.
-  Changing either option will clear cached drop data so updated tables are fetched.
-- **Dim locked items** – Dim the icons of locked items throughout the game interface.
-- **Dim opacity** – Control how transparent the dimming effect is (0 = no dim, 255 = fully transparent).
+### 💾 Persistence & Sync
+- Data stored locally as JSON
+- Mirrored to RuneLite cloud profiles
+- Automatically syncs across machines
+- Character-specific storage
+
+---
+
+### 🛒 Grand Exchange Integration
+- Locked items hidden or dimmed in GE search
+- GE purchases can require prior unlock
+
+---
+
+### 🌑 Visual Feedback
+- Locked items are dimmed across interfaces
+- Dimming strength is configurable
+
+---
+
+## Configuration Options
+
+Accessible via RuneLite plugin settings:
+
+- Free-to-Play mode
+- Include F2P trade-only items
+- Roll item sets
+- Roll flatpacks
+- Weapon poison unlock rules
+- Roll sound effects
+- GE purchase restrictions
+- Chat colors for roll events
+- Number of roll choices
+- Drop sorting by rarity
+- Rare drop table toggle
+- Gem drop table toggle
+- Locked item dimming & opacity
+
+---
 
 ## Usage
 
-1. **Start the Plugin**
-    - Enable **ChanceMan** in the RuneLite plugin list.
-    - The plugin automatically scans for tradeable items (excluding coins) and locks them until a roll occurs.
+1. Enable **Choicer** in RuneLite
+2. Encounter a locked item
+3. Choose one item from the roll to unlock
+4. Use unlocked items normally
+5. Track progress in the side panel
 
-2. **Encountering Locked Items**
-    - When you see a locked item on the ground or receive it in your inventory, ChanceMan will prompt a roll if it hasn’t already been rolled.
-    - The item remains locked until the roll animation completes and it’s unlocked.
+Manual rolls are available if locked items remain.
 
-3. **Manual Rolls**
-    - Use the **Roll** button in the ChanceMan panel to manually trigger a roll for a random locked item if you have any remaining locked items.
-    - A spinning animation appears in an overlay, revealing the unlocked item at the end.
+---
 
-4. **Viewing Progress**
-    - Open the **ChanceMan** side panel to see the **Rolled Items** and **Unlocked Items** columns.
-    - The **Rolled Items** list tracks which items have triggered a roll.
-    - The **Unlocked Items** list displays items that are fully unlocked for use.
+## Data Storage
 
-5. **Restrictions**
-    - While locked, items cannot be used, eaten, equipped, or otherwise interacted with (except “examine” and “drop”).
-    - Once unlocked, they function as normal items.
+Progress is stored per character:
 
-## File Locations
+~/.runelite/choicer/<player_name>/
+├── choicer_unlocked.json
+└── choicer_rolled.json
 
-- **Unlocked Items**  
-  `~/.runelite/chanceman/<player_name>/chanceman_unlocked.json`
-- **Rolled Items**  
-  `~/.runelite/chanceman/<player_name>/chanceman_rolled.json`
+---
 
-These JSON files store your progress. Each player’s data is kept in a separate folder named after their in-game character name.
+## Attribution & Licensing
 
-## Contribution
+This project is based on **ChanceMan** by **ChunkyAtlas**  
+Original repository:  
+https://github.com/ChunkyAtlas/ChanceMan
 
-Contributions are welcome! If you encounter any issues, want new features, or have general feedback, please open an issue or submit a pull request.
+Licensed under the **BSD 2-Clause License**.  
+All original copyright notices are preserved.
+
+Choicer introduces independent modifications, UI changes, and feature expansions while respecting the original license terms.
+
+---
+
+## Contributions
+
+Bug reports, suggestions, and pull requests are welcome.  
+Please keep requests within RuneLite and Jagex rules.
+
+---
 
 ## Contact
 
-For questions, support, or feature requests, please open an issue on GitHub or contact me at monstermonitor@proton.me
+- GitHub Issues for bugs and feature requests
+- Discord server linked in the plugin UI
+- Email for general inquiries: attosservices@gmail.com

@@ -1,0 +1,95 @@
+package com.choicer.ui;
+
+import com.choicer.drops.DropItem;
+import net.runelite.api.Client;
+import net.runelite.api.MenuEntry;
+import net.runelite.api.MenuAction;
+import net.runelite.api.widgets.Widget;
+
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
+
+public final class WidgetUtils
+{
+    /**
+     * Creates a "Show Drops" menu entry identical to the original Attack entry.
+     *
+     * @param client      The RuneLite client.
+     * @param insertIndex The index at which to insert the new entry.
+     * @param attackEntry The original "Attack" menu entry to clone.
+     * @return A configured MenuEntry that runs a custom drop display.
+     */
+    public static MenuEntry createShowDropsEntry(
+            Client client,
+            int insertIndex,
+            MenuEntry attackEntry
+    )
+    {
+        return client.getMenu()
+                .createMenuEntry(insertIndex)
+                .setOption("Show Drops")
+                .setTarget(attackEntry.getTarget())
+                .setIdentifier(attackEntry.getIdentifier())
+                .setParam0(attackEntry.getParam0())
+                .setParam1(attackEntry.getParam1())
+                .setType(MenuAction.RUNELITE);
+    }
+
+    /**
+     * Hides all static and dynamic children of the given widget, if any exist.
+     *
+     * @param widget The widget whose children should be hidden.
+     */
+    public static void hideAllChildrenSafely(Widget widget)
+    {
+        if (widget == null)
+            return;
+
+        Widget[] staticKids = widget.getChildren();
+        if (staticKids != null)
+        {
+            for (Widget child : staticKids)
+            {
+                if (child != null) child.setHidden(true);
+            }
+        }
+
+        Widget[] dynamicKids = widget.getDynamicChildren();
+        if (dynamicKids != null)
+        {
+            for (Widget child : dynamicKids)
+            {
+                if (child != null) child.setHidden(true);
+            }
+        }
+    }
+
+    /**
+     * Deduplicates a list of DropItems by item ID and optionally sorts them by rarity.
+     *
+     * <p>When sorting by rarity, the resulting list is ordered from most common
+     * to rarest. Unknown rarities are treated as the rarest drops.</p>
+     *
+     * @param drops        The list of DropItems to process.
+     * @param sortByRarity If {@code true}, sort by rarity; otherwise sort by item ID.
+     * @return A new sorted, deduplicated list.
+     */
+    public static List<DropItem> dedupeAndSort(List<DropItem> drops, boolean sortByRarity)
+    {
+        return drops.stream()
+                .filter(d -> d.getItemId() > 0)
+                .collect(Collectors.toMap(
+                        DropItem::getItemId,
+                        d -> d,
+                        (first, second) -> first,
+                        LinkedHashMap::new
+                ))
+                .values().stream()
+                .sorted(sortByRarity
+                        ? Comparator.comparingDouble(DropItem::getRarityValue)
+                        .thenComparingInt(DropItem::getItemId)
+                        : Comparator.comparingInt(DropItem::getItemId))
+                .collect(Collectors.toList());
+    }
+}

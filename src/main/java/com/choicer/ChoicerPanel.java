@@ -27,645 +27,779 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Panel for displaying rolled and unlocked items.
- * It provides UI for manual roll actions, search/filter functionality,
- * and displays each item with its icon and full item name.
- * Each item panel shows a tooltip on both the icon and the panel with the item name.
- */
+* Panel for displaying rolled and unlocked items.
+* It provides UI for manual roll actions, search/filter functionality,
+* and displays each item with its icon and full item name.
+* Each item panel shows a tooltip on both the icon and the panel with the item name.
+*/
 public class ChoicerPanel extends PluginPanel
 {
-    private final UnlockedItemsManager unlockedItemsManager;
-    private final RolledItemsManager rolledItemsManager;
-    private final ItemManager itemManager;
-    private final HashSet<Integer> allTradeableItems;
-    private final ClientThread clientThread;
-    private final RollAnimationManager rollAnimationManager;
+    private static final Color BG = new Color(34, 30, 23);
+    private static final Color PANEL_BG = new Color(44, 38, 28);
+    private static final Color PANEL_BG_ALT = new Color(50, 43, 32);
+    private static final Color PANEL_BORDER = new Color(92, 76, 52);
+    private static final Color PANEL_HIGHLIGHT = new Color(120, 102, 70);
+    private static final Color PANEL_SHADOW = new Color(24, 20, 14);
+    private static final Color ACCENT = new Color(201, 168, 92);
+    private static final Color TEXT = new Color(232, 217, 175);
+    private static final Color TEXT_MUTED = new Color(200, 186, 150);
+    private static final Color LIST_ROW_A_TOP = new Color(54, 46, 34);
+    private static final Color LIST_ROW_A_BOTTOM = new Color(42, 36, 27);
+    private static final Color LIST_ROW_B_TOP = new Color(49, 42, 32);
+    private static final Color LIST_ROW_B_BOTTOM = new Color(38, 33, 25);
+    private static final Color LIST_ROW_SEPARATOR = new Color(61, 52, 37);
+    private static final Color SELECTION_TOP = new Color(109, 90, 55);
+    private static final Color SELECTION_BOTTOM = new Color(78, 64, 38);
+    private static final Color SELECTION_BORDER = new Color(201, 168, 92);
+    private static final Color FIELD_BG = new Color(42, 36, 27);
+    private static final Color BUTTON_HOVER = new Color(68, 56, 36);
 
-    // Caches for item icons and names
-    private final Map<Integer, ImageIcon> itemIconCache = new HashMap<>();
-    private final Map<Integer, String> itemNameCache = new HashMap<>();
+    private static final Font TITLE_FONT = new Font("Georgia", Font.BOLD, 18);
+    private static final Font UI_FONT = new Font("Georgia", Font.PLAIN, 12);
+    private static final Font SMALL_FONT = new Font("Georgia", Font.PLAIN, 11);
 
-    // CardLayout panel to show either Rolled or Unlocked view
-    private final JPanel centerCardPanel = new JPanel(new CardLayout());
-    private final DefaultListModel<Integer> rolledModel = new DefaultListModel<>();
-    private final JList<Integer> rolledList = new JList<>(rolledModel);
-    private final DefaultListModel<Integer> unlockedModel = new DefaultListModel<>();
-    private final JList<Integer> unlockedList = new JList<>(unlockedModel);
+private final UnlockedItemsManager unlockedItemsManager;
+private final RolledItemsManager rolledItemsManager;
+private final ItemManager itemManager;
+private final HashSet<Integer> allTradeableItems;
+private final ClientThread clientThread;
+private final RollAnimationManager rollAnimationManager;
 
-    // View selection row: 3 buttons (swap, filter unlocked-not-rolled, filter unlocked-and-rolled)
+// Caches for item icons and names
+private final Map<Integer, ImageIcon> itemIconCache = new HashMap<>();
+private final Map<Integer, String> itemNameCache = new HashMap<>();
+
+// CardLayout panel to show either Rolled or Unlocked view
+private final JPanel centerCardPanel = new JPanel(new CardLayout());
+private final DefaultListModel<Integer> rolledModel = new DefaultListModel<>();
+private final JList<Integer> rolledList = new JList<>(rolledModel);
+private final DefaultListModel<Integer> unlockedModel = new DefaultListModel<>();
+private final JList<Integer> unlockedList = new JList<>(unlockedModel);
+
+// View selection row: 3 buttons (swap, filter unlocked-not-rolled, filter unlocked-and-rolled)
     private final JButton swapViewButton = new JButton("🔄");
     private final JToggleButton filterUnlockedNotRolledButton = new JToggleButton("🔓");
     private final JToggleButton filterUnlockedAndRolledButton = new JToggleButton("🔀");
 
-    // Flag for current view: true = showing Unlocked, false = showing Rolled
-    private boolean showingUnlocked = true;
+// Flag for current view: true = showing Unlocked, false = showing Rolled
+private boolean showingUnlocked = true;
 
-    // Search text
-    private String searchText = "";
+// Search text
+private String searchText = "";
 
-    // Single count label at the bottom
-    private final JLabel countLabel = new JLabel("Unlocked: 0/0");
+// Single count label at the bottom
+private final JLabel countLabel = new JLabel("Unlocked: 0/0");
 
-    // Roll button for manual roll actions
-    private final JButton rollButton = new JButton("Roll");
+// Roll button for manual roll actions
+private final JButton rollButton = new JButton("Roll");
 
-    // Active filter: "NONE", "UNLOCKED_NOT_ROLLED", or "UNLOCKED_AND_ROLLED"
-    private String activeFilter = "NONE";
+// Active filter: "NONE", "UNLOCKED_NOT_ROLLED", or "UNLOCKED_AND_ROLLED"
+private String activeFilter = "NONE";
 
-    // Join Discord Button links to discord invite
-    private final JButton discordButton = new JButton();
+// Default color for item text
+    private final Color defaultItemTextColor = TEXT;
 
-    // Default color for item text
-    private final Color defaultItemTextColor = new Color(220, 220, 220);
-
-    /**
+/**
      * Constructs a ChoicerPanel.
-     *
-     * @param unlockedItemsManager Manager for unlocked items.
-     * @param rolledItemsManager   Manager for rolled items.
-     * @param itemManager          The item manager.
-     * @param allTradeableItems    List of all tradeable item IDs.
-     * @param clientThread         The client thread for scheduling UI updates.
-     * @param rollAnimationManager The roll animation manager to trigger animations.
-     */
+    *
+    * @param unlockedItemsManager Manager for unlocked items.
+    * @param rolledItemsManager   Manager for rolled items.
+    * @param itemManager          The item manager.
+    * @param allTradeableItems    List of all tradeable item IDs.
+    * @param clientThread         The client thread for scheduling UI updates.
+    * @param rollAnimationManager The roll animation manager to trigger animations.
+    */
     public ChoicerPanel(
-            UnlockedItemsManager unlockedItemsManager,
-            RolledItemsManager rolledItemsManager,
-            ItemManager itemManager,
-            HashSet<Integer> allTradeableItems,
-            ClientThread clientThread,
-            RollAnimationManager rollAnimationManager
-    )
-    {
-        this.unlockedItemsManager = unlockedItemsManager;
-        this.rolledItemsManager = rolledItemsManager;
-        this.itemManager = itemManager;
-        this.allTradeableItems = allTradeableItems;
-        this.clientThread = clientThread;
-        this.rollAnimationManager = rollAnimationManager;
-        init();
-    }
+UnlockedItemsManager unlockedItemsManager,
+RolledItemsManager rolledItemsManager,
+ItemManager itemManager,
+HashSet<Integer> allTradeableItems,
+ClientThread clientThread,
+RollAnimationManager rollAnimationManager
+)
+{
+this.unlockedItemsManager = unlockedItemsManager;
+this.rolledItemsManager = rolledItemsManager;
+this.itemManager = itemManager;
+this.allTradeableItems = allTradeableItems;
+this.clientThread = clientThread;
+this.rollAnimationManager = rollAnimationManager;
+init();
+}
 
-    /**
-     * Initializes the panel UI components.
-     */
-    private void init()
-    {
-        setLayout(new BorderLayout());
-        setBorder(new EmptyBorder(15, 15, 15, 15));
-        setBackground(new Color(37, 37, 37));
+/**
+    * Initializes the panel UI components.
+    */
+private void init()
+{
+setLayout(new BorderLayout());
+setBorder(new EmptyBorder(15, 15, 15, 15));
+        setBackground(BG);
 
-        // ========== TOP PANEL (Header, Search, Buttons Row) ==========
-        JPanel topPanel = new JPanel();
-        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
-        topPanel.setOpaque(false);
+// ========== TOP PANEL (Header, Search, Buttons Row) ==========
+JPanel topPanel = new JPanel();
+topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
+topPanel.setOpaque(false);
 
-        // Header
-        topPanel.add(buildHeaderPanel());
-        topPanel.add(Box.createVerticalStrut(10));
+// Header
+topPanel.add(buildHeaderPanel());
+topPanel.add(Box.createVerticalStrut(10));
 
-        // Search Bar
-        topPanel.add(buildSearchBar());
-        topPanel.add(Box.createVerticalStrut(10));
+// Search Bar
+topPanel.add(buildSearchBar());
+topPanel.add(Box.createVerticalStrut(10));
 
-        // Button row: 3 columns, each for one button
-        JPanel buttonRowPanel = new JPanel(new GridLayout(1, 3, 10, 0));
-        buttonRowPanel.setOpaque(false);
+// Button row: 3 columns, each for one button
+JPanel buttonRowPanel = new JPanel(new GridLayout(1, 3, 10, 0));
+buttonRowPanel.setOpaque(false);
 
-        // Style the 3 buttons identically
-        styleButton(swapViewButton);
-        styleToggleButton(filterUnlockedNotRolledButton);
-        styleToggleButton(filterUnlockedAndRolledButton);
+// Style the 3 buttons identically
+styleButton(swapViewButton);
+styleToggleButton(filterUnlockedNotRolledButton);
+styleToggleButton(filterUnlockedAndRolledButton);
 
-        // Tooltips & actions
-        swapViewButton.setToolTipText("Swap between Unlocked and Rolled views");
-        swapViewButton.addActionListener(e -> toggleView());
+// Tooltips & actions
+swapViewButton.setToolTipText("Swap between Unlocked and Rolled views");
+swapViewButton.addActionListener(e -> toggleView());
 
-        filterUnlockedNotRolledButton.setToolTipText("Filter: Show items that are unlocked but not rolled");
-        filterUnlockedNotRolledButton.addActionListener(e ->
-        {
-            if (filterUnlockedNotRolledButton.isSelected())
-            {
-                activeFilter = "UNLOCKED_NOT_ROLLED";
-                filterUnlockedAndRolledButton.setSelected(false);
-            }
-            else
-            {
-                activeFilter = "NONE";
-            }
-            updatePanel();
-        });
+filterUnlockedNotRolledButton.setToolTipText("Filter: Show items that are unlocked but not rolled");
+filterUnlockedNotRolledButton.addActionListener(e ->
+{
+if (filterUnlockedNotRolledButton.isSelected())
+{
+activeFilter = "UNLOCKED_NOT_ROLLED";
+filterUnlockedAndRolledButton.setSelected(false);
+}
+else
+{
+activeFilter = "NONE";
+}
+updatePanel();
+});
 
-        filterUnlockedAndRolledButton.setToolTipText("Filter: Show items that are both unlocked and rolled");
-        filterUnlockedAndRolledButton.addActionListener(e ->
-        {
-            if (filterUnlockedAndRolledButton.isSelected())
-            {
-                activeFilter = "UNLOCKED_AND_ROLLED";
-                filterUnlockedNotRolledButton.setSelected(false);
-            }
-            else
-            {
-                activeFilter = "NONE";
-            }
-            updatePanel();
-        });
+filterUnlockedAndRolledButton.setToolTipText("Filter: Show items that are both unlocked and rolled");
+filterUnlockedAndRolledButton.addActionListener(e ->
+{
+if (filterUnlockedAndRolledButton.isSelected())
+{
+activeFilter = "UNLOCKED_AND_ROLLED";
+filterUnlockedNotRolledButton.setSelected(false);
+}
+else
+{
+activeFilter = "NONE";
+}
+updatePanel();
+});
 
-        // Add them in left->right order
-        buttonRowPanel.add(swapViewButton);
-        buttonRowPanel.add(filterUnlockedNotRolledButton);
-        buttonRowPanel.add(filterUnlockedAndRolledButton);
+// Add them in left->right order
+buttonRowPanel.add(swapViewButton);
+buttonRowPanel.add(filterUnlockedNotRolledButton);
+buttonRowPanel.add(filterUnlockedAndRolledButton);
 
-        // Add the row to the top panel
-        topPanel.add(buttonRowPanel);
+// Add the row to the top panel
+topPanel.add(buttonRowPanel);
 
-        // EXTRA SPACE between the buttons row and the icon panel
-        topPanel.add(Box.createVerticalStrut(10));
+// EXTRA SPACE between the buttons row and the icon panel
+topPanel.add(Box.createVerticalStrut(10));
 
-        add(topPanel, BorderLayout.NORTH);
+add(topPanel, BorderLayout.NORTH);
 
-        // ========== CENTER PANEL (CardLayout) ==========
-        rolledList.setCellRenderer(new ItemCellRenderer());
-        rolledList.setVisibleRowCount(10);
-        rolledList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        JScrollPane rolledScroll = new JScrollPane(
-                rolledList,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        );
-        rolledScroll.setPreferredSize(new Dimension(250, 300));
-        JPanel rolledContainer = createTitledPanel("Rolled Items", rolledScroll);
+// ========== CENTER PANEL (CardLayout) ==========
+rolledList.setCellRenderer(new ItemCellRenderer());
+rolledList.setVisibleRowCount(10);
+rolledList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+JScrollPane rolledScroll = new JScrollPane(
+rolledList,
+JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+);
+rolledScroll.setPreferredSize(new Dimension(250, 300));
+        applyListTheme(rolledList, rolledScroll);
+JPanel rolledContainer = createTitledPanel("Rolled Items", rolledScroll);
 
-        // Use a custom cell renderer that can handle long text
-        unlockedList.setCellRenderer(new ItemCellRenderer());
-        unlockedList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        unlockedList.setLayoutOrientation(JList.VERTICAL);
-        unlockedList.setVisibleRowCount(-1);
-        
-        // Create a scroll pane with horizontal scrolling enabled
-        JScrollPane unlockedScroll = new JScrollPane(
-            unlockedList,
-            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-            JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED
-        );
-        unlockedScroll.setPreferredSize(new Dimension(250, 300)); // Set a reasonable default size
-        unlockedScroll.setWheelScrollingEnabled(true);
-        JPanel unlockedContainer = createTitledPanel("Unlocked Items", unlockedScroll);
+// Use a custom cell renderer that can handle long text
+unlockedList.setCellRenderer(new ItemCellRenderer());
+unlockedList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+unlockedList.setLayoutOrientation(JList.VERTICAL);
+unlockedList.setVisibleRowCount(-1);
 
-        centerCardPanel.add(rolledContainer, "ROLLED");
-        centerCardPanel.add(unlockedContainer, "UNLOCKED");
-        add(centerCardPanel, BorderLayout.CENTER);
+// Create a scroll pane with horizontal scrolling enabled
+JScrollPane unlockedScroll = new JScrollPane(
+unlockedList,
+JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED
+);
+unlockedScroll.setPreferredSize(new Dimension(250, 300)); // Set a reasonable default size
+unlockedScroll.setWheelScrollingEnabled(true);
+        applyListTheme(unlockedList, unlockedScroll);
+JPanel unlockedContainer = createTitledPanel("Unlocked Items", unlockedScroll);
 
-        // ========== BOTTOM PANEL (Count + Roll) ==========
-        JPanel bottomPanel = new JPanel();
-        bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
-        bottomPanel.setOpaque(false);
+centerCardPanel.add(rolledContainer, "ROLLED");
+centerCardPanel.add(unlockedContainer, "UNLOCKED");
+add(centerCardPanel, BorderLayout.CENTER);
 
-        // Single count label
-        JPanel countPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        countPanel.setOpaque(false);
-        countLabel.setFont(new Font("Arial", Font.BOLD, 11));
-        countLabel.setForeground(new Color(220, 220, 220));
-        countPanel.add(countLabel);
-        bottomPanel.add(countPanel);
-        bottomPanel.add(Box.createVerticalStrut(10));
+// ========== BOTTOM PANEL (Count + Roll) ==========
+JPanel bottomPanel = new JPanel();
+bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+bottomPanel.setOpaque(false);
 
-        // Roll button
-        JPanel rollButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        rollButtonPanel.setOpaque(false);
-        rollButton.setPreferredSize(new Dimension(100, 30));
-        rollButton.setFocusPainted(false);
-        rollButton.setBackground(new Color(60, 63, 65));
-        rollButton.setForeground(Color.WHITE);
-        rollButton.setFont(new Font("SansSerif", Font.BOLD, 12));
-        rollButton.addActionListener(this::performManualRoll);
-        rollButtonPanel.add(rollButton);
-        bottomPanel.add(rollButtonPanel);
+// Single count label
+JPanel countPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+countPanel.setOpaque(false);
+        countLabel.setFont(SMALL_FONT.deriveFont(Font.BOLD));
+        countLabel.setForeground(TEXT_MUTED);
+countPanel.add(countLabel);
+bottomPanel.add(countPanel);
+bottomPanel.add(Box.createVerticalStrut(10));
 
-        add(bottomPanel, BorderLayout.SOUTH);
+// Roll button
+JPanel rollButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+rollButtonPanel.setOpaque(false);
+rollButton.setPreferredSize(new Dimension(100, 30));
+rollButton.setFocusPainted(false);
+        rollButton.setBackground(PANEL_BG_ALT);
+        rollButton.setForeground(TEXT);
+        rollButton.setFont(UI_FONT.deriveFont(Font.BOLD));
+        rollButton.setBorder(new LineBorder(ACCENT));
+        installButtonHover(rollButton, PANEL_BG_ALT);
+rollButton.addActionListener(this::performManualRoll);
+rollButtonPanel.add(rollButton);
+bottomPanel.add(rollButtonPanel);
 
-        // Default to Unlocked view
-        showingUnlocked = true;
-        ((CardLayout) centerCardPanel.getLayout()).show(centerCardPanel, "UNLOCKED");
-        updatePanel();
-    }
+add(bottomPanel, BorderLayout.SOUTH);
 
-    /**
-     * Renders each item ID as an icon + name in the JList.
-     */
-    private class ItemCellRenderer extends JPanel implements ListCellRenderer<Integer>
-    {
-        private final JLabel iconLabel = new JLabel();
-        private final JLabel nameLabel = new JLabel();
-        private final int PREFERRED_HEIGHT = 32; // Height for each row
+// Default to Unlocked view
+showingUnlocked = true;
+((CardLayout) centerCardPanel.getLayout()).show(centerCardPanel, "UNLOCKED");
+updatePanel();
+}
 
-        public ItemCellRenderer()
-        {
-            setLayout(new BorderLayout(5, 0));
-            setOpaque(true);
-            add(iconLabel, BorderLayout.WEST);
-            add(nameLabel, BorderLayout.CENTER);
-            nameLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
-        }
+/**
+    * Renders each item ID as an icon + name in the JList.
+    */
+private class ItemCellRenderer extends JPanel implements ListCellRenderer<Integer>
+{
+private final JLabel iconLabel = new JLabel();
+private final JLabel nameLabel = new JLabel();
+        private final int PREFERRED_HEIGHT = 38; // Height for each row
+        private boolean selected = false;
+        private boolean evenRow = false;
+
+public ItemCellRenderer()
+{
+            setLayout(new BorderLayout(8, 0));
+            setOpaque(false);
+add(iconLabel, BorderLayout.WEST);
+add(nameLabel, BorderLayout.CENTER);
+            nameLabel.setFont(SMALL_FONT);
+            iconLabel.setBorder(new EmptyBorder(0, 2, 0, 4));
+            iconLabel.setOpaque(false);
+            nameLabel.setOpaque(false);
+}
+
+@Override
+public Dimension getPreferredSize()
+{
+Dimension preferred = super.getPreferredSize();
+preferred.height = PREFERRED_HEIGHT;
+return preferred;
+}
+
+@Override
+public Component getListCellRendererComponent(JList<? extends Integer> list,
+Integer itemId,
+int index,
+boolean isSelected,
+boolean cellHasFocus)
+{
+// icon
+iconLabel.setIcon(getItemIcon(itemId));
+
+// name (async load if missing)
+String name = itemNameCache.get(itemId);
+if (name == null)
+{
+nameLabel.setText("Loading…");
+getItemNameAsync(itemId, n ->
+{
+itemNameCache.put(itemId, n);
+list.repaint(list.getCellBounds(index, index));
+});
+}
+else
+{
+nameLabel.setText(name);
+}
+
+// selection styling
+            selected = isSelected;
+            evenRow = (index % 2 == 0);
+            nameLabel.setForeground(isSelected ? TEXT : defaultItemTextColor);
+
+            Border line = isSelected
+                    ? new LineBorder(SELECTION_BORDER)
+                    : new MatteBorder(0, 0, 1, 0, LIST_ROW_SEPARATOR);
+            setBorder(new CompoundBorder(line, new EmptyBorder(4, 8, 4, 8)));
+
+// Let Swing compute width from the label's preferred size
+nameLabel.setPreferredSize(null);
+setPreferredSize(null);
+
+return this;
+}
 
         @Override
-        public Dimension getPreferredSize()
+        protected void paintComponent(Graphics g)
         {
-            Dimension preferred = super.getPreferredSize();
-            preferred.height = PREFERRED_HEIGHT;
-            return preferred;
-        }
-
-        @Override
-        public Component getListCellRendererComponent(JList<? extends Integer> list,
-                                                      Integer itemId,
-                                                      int index,
-                                                      boolean isSelected,
-                                                      boolean cellHasFocus)
-        {
-            // icon
-            iconLabel.setIcon(getItemIcon(itemId));
-
-            // name (async load if missing)
-            String name = itemNameCache.get(itemId);
-            if (name == null)
+            Graphics2D g2 = (Graphics2D) g.create();
+            try
             {
-                nameLabel.setText("Loading…");
-                getItemNameAsync(itemId, n ->
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                Color top;
+                Color bottom;
+                if (selected)
                 {
-                    itemNameCache.put(itemId, n);
-                    list.repaint(list.getCellBounds(index, index));
-                });
+                    top = SELECTION_TOP;
+                    bottom = SELECTION_BOTTOM;
+                }
+                else if (evenRow)
+                {
+                    top = LIST_ROW_A_TOP;
+                    bottom = LIST_ROW_A_BOTTOM;
+                }
+                else
+                {
+                    top = LIST_ROW_B_TOP;
+                    bottom = LIST_ROW_B_BOTTOM;
+                }
+                g2.setPaint(new GradientPaint(0, 0, top, 0, getHeight(), bottom));
+                g2.fillRect(0, 0, getWidth(), getHeight());
             }
-            else
+            finally
             {
-                nameLabel.setText(name);
+                g2.dispose();
             }
-
-            // selection styling
-            if (isSelected)
-            {
-                setBackground(list.getSelectionBackground());
-                setForeground(list.getSelectionForeground());
-            }
-            else
-            {
-                setBackground(new Color(60, 63, 65));
-                nameLabel.setForeground(defaultItemTextColor);
-            }
-
-            // Let Swing compute width from the label's preferred size
-            nameLabel.setPreferredSize(null);
-            setPreferredSize(null);
-
-            return this;
+            super.paintComponent(g);
         }
+}
+
+/**
+    * Toggles between Unlocked view and Rolled view.
+    */
+private void toggleView()
+{
+showingUnlocked = !showingUnlocked;
+CardLayout cl = (CardLayout) centerCardPanel.getLayout();
+if (showingUnlocked)
+{
+cl.show(centerCardPanel, "UNLOCKED");
+}
+else
+{
+cl.show(centerCardPanel, "ROLLED");
+}
+updatePanel();
+}
+
+/**
+    * Creates a titled container panel that wraps the given content panel.
+    *
+    * @param title        The title to display on the border.
+    * @return The container panel.
+    */
+private JPanel createTitledPanel(String title, Component content)
+{
+JPanel container = new JPanel(new BorderLayout());
+container.setOpaque(false);
+
+        Border line = new LineBorder(PANEL_BORDER);
+        Border inner = new MatteBorder(1, 1, 1, 1, PANEL_HIGHLIGHT);
+        Border empty = new EmptyBorder(6, 6, 6, 6);
+TitledBorder titled = BorderFactory.createTitledBorder(line, title);
+        titled.setTitleColor(TEXT_MUTED);
+        titled.setTitleFont(UI_FONT.deriveFont(Font.BOLD));
+        container.setBorder(new CompoundBorder(new CompoundBorder(titled, inner), empty));
+
+// Wrap content in a panel with FlowLayout to prevent horizontal stretching
+JPanel contentWrapper = new JPanel(new BorderLayout());
+contentWrapper.setOpaque(false);
+contentWrapper.add(content, BorderLayout.CENTER);
+
+// Add the wrapper to the container
+container.add(contentWrapper, BorderLayout.CENTER);
+return container;
+}
+
+/**
+    * Styles a general JButton to match the design.
+    *
+    * @param button The button to style.
+    */
+private void styleButton(JButton button)
+{
+button.setFocusPainted(false);
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setBackground(PANEL_BG_ALT);
+        button.setForeground(TEXT);
+        button.setFont(UI_FONT.deriveFont(Font.BOLD));
+        button.setBorder(new LineBorder(ACCENT));
+button.setPreferredSize(new Dimension(50, 30));
+        installButtonHover(button, PANEL_BG_ALT);
+}
+
+/**
+    * Styles a JToggleButton to match the design.
+    *
+    * @param button The toggle button to style.
+    */
+    private void styleToggleButton(JToggleButton button)
+{
+button.setFocusPainted(false);
+        button.setOpaque(true);
+        button.setContentAreaFilled(true);
+        button.setForeground(TEXT);
+        button.setFont(UI_FONT.deriveFont(Font.BOLD));
+        button.setBorder(new LineBorder(ACCENT));
+        button.addChangeListener(e -> applyToggleState(button));
+        applyToggleState(button);
+button.setPreferredSize(new Dimension(50, 30));
+        installButtonHover(button, PANEL_BG_ALT);
     }
 
-    /**
-     * Toggles between Unlocked view and Rolled view.
-     */
-    private void toggleView()
+    private void applyToggleState(JToggleButton button)
     {
-        showingUnlocked = !showingUnlocked;
-        CardLayout cl = (CardLayout) centerCardPanel.getLayout();
-        if (showingUnlocked)
+        if (button.isSelected())
         {
-            cl.show(centerCardPanel, "UNLOCKED");
+            button.setBackground(SELECTION_BOTTOM);
+            button.setForeground(TEXT);
         }
         else
         {
-            cl.show(centerCardPanel, "ROLLED");
+            button.setBackground(PANEL_BG_ALT);
+            button.setForeground(TEXT_MUTED);
         }
-        updatePanel();
     }
 
-    /**
-     * Creates a titled container panel that wraps the given content panel.
-     *
-     * @param title        The title to display on the border.
-     * @return The container panel.
-     */
-    private JPanel createTitledPanel(String title, Component content)
+    private void installButtonHover(AbstractButton button, Color normal)
     {
-        JPanel container = new JPanel(new BorderLayout());
-        container.setOpaque(false);
+        button.addMouseListener(new java.awt.event.MouseAdapter()
+        {
+            @Override
+            public void mouseEntered(java.awt.event.MouseEvent e)
+            {
+                if (!button.isEnabled()) return;
+                button.setBackground(BUTTON_HOVER);
+            }
 
-        Border line = new LineBorder(new Color(80, 80, 80));
-        Border empty = new EmptyBorder(5, 5, 5, 5);
-        TitledBorder titled = BorderFactory.createTitledBorder(line, title);
-        titled.setTitleColor(new Color(200, 200, 200));
-        container.setBorder(new CompoundBorder(titled, empty));
-
-        // Wrap content in a panel with FlowLayout to prevent horizontal stretching
-        JPanel contentWrapper = new JPanel(new BorderLayout());
-        contentWrapper.setOpaque(false);
-        contentWrapper.add(content, BorderLayout.CENTER);
-        
-        // Add the wrapper to the container
-        container.add(contentWrapper, BorderLayout.CENTER);
-        return container;
+            @Override
+            public void mouseExited(java.awt.event.MouseEvent e)
+            {
+                if (!button.isEnabled()) return;
+                if (button instanceof JToggleButton && ((JToggleButton) button).isSelected())
+                {
+                    button.setBackground(SELECTION_BOTTOM);
+                }
+                else
+                {
+                    button.setBackground(normal);
+                }
+            }
+        });
     }
 
-    /**
-     * Styles a general JButton to match the design.
-     *
-     * @param button The button to style.
-     */
-    private void styleButton(JButton button)
+    private void applyListTheme(JList<Integer> list, JScrollPane scroll)
     {
-        button.setFocusPainted(false);
-        button.setBackground(new Color(60, 63, 65));
-        button.setForeground(Color.WHITE);
-        button.setFont(new Font("SansSerif", Font.BOLD, 12));
-        button.setPreferredSize(new Dimension(50, 30));
-    }
+        list.setBackground(PANEL_BG);
+        list.setForeground(TEXT);
+        list.setSelectionBackground(SELECTION_BOTTOM);
+        list.setSelectionForeground(TEXT);
+        list.setFixedCellHeight(-1);
 
-    /**
-     * Styles a JToggleButton to match the design.
-     *
-     * @param button The toggle button to style.
-     */
-    private void styleToggleButton(JToggleButton button)
-    {
-        button.setFocusPainted(false);
-        button.setBackground(new Color(60, 63, 65));
-        button.setForeground(Color.WHITE);
-        button.setFont(new Font("SansSerif", Font.BOLD, 12));
-        button.setPreferredSize(new Dimension(50, 30));
-    }
+        scroll.getViewport().setBackground(PANEL_BG);
+        scroll.setBorder(new CompoundBorder(
+                new CompoundBorder(new LineBorder(PANEL_BORDER), new MatteBorder(1, 1, 1, 1, PANEL_SHADOW)),
+                new EmptyBorder(4, 4, 4, 4)
+        ));
+        scroll.getVerticalScrollBar().setBackground(PANEL_BG);
+        scroll.getHorizontalScrollBar().setBackground(PANEL_BG);
+}
 
-    /**
-     * Builds the header panel with an icon and title.
-     *
-     * @return The header panel.
-     */
-    private JPanel buildHeaderPanel()
-    {
-        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        headerPanel.setOpaque(false);
+/**
+    * Builds the header panel with an icon and title.
+    *
+    * @return The header panel.
+    */
+private JPanel buildHeaderPanel()
+{
+JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+headerPanel.setOpaque(false);
 
-        // Header icon
+// Header icon
         ImageIcon headerIcon = new ImageIcon(getClass().getResource("/com/choicer/icon.png"));
-        JLabel iconLabel = new JLabel(headerIcon);
+JLabel iconLabel = new JLabel(headerIcon);
 
-        // Title label
+// Title label
         JLabel titleLabel = new JLabel("Choicer");
-        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
-        titleLabel.setForeground(new Color(220, 220, 220));
+        titleLabel.setFont(TITLE_FONT);
+        titleLabel.setForeground(TEXT);
 
-        // Create the Discord button
-        JButton discordButton = new JButton();
+// Create the Discord button
+JButton discordButton = new JButton();
         discordButton.setToolTipText("Join The Choicer Discord");
-        // Scale the Discord icon to 16x16
+// Scale the Discord icon to 16x16
         ImageIcon discordIcon = new ImageIcon(getClass().getResource("/com/choicer/discord.png"));
-        Image scaledImage = discordIcon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
-        discordButton.setIcon(new ImageIcon(scaledImage));
-        // Make the button look flat (no border or background)
-        discordButton.setOpaque(false);
-        discordButton.setContentAreaFilled(false);
-        discordButton.setBorderPainted(false);
-        // Add an action to open the Discord link
+Image scaledImage = discordIcon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
+discordButton.setIcon(new ImageIcon(scaledImage));
+// Make the button look flat (no border or background)
+discordButton.setOpaque(false);
+discordButton.setContentAreaFilled(false);
+discordButton.setBorderPainted(false);
+// Add an action to open the Discord link
         discordButton.addActionListener(e -> LinkBrowser.browse("https://discord.gg/jhJYKpS7G8"));
 
-        // Assemble the header panel
-        headerPanel.add(iconLabel);
-        headerPanel.add(Box.createHorizontalStrut(10));
-        headerPanel.add(titleLabel);
-        headerPanel.add(discordButton);
+// Assemble the header panel
+headerPanel.add(iconLabel);
+headerPanel.add(Box.createHorizontalStrut(10));
+headerPanel.add(titleLabel);
+headerPanel.add(discordButton);
 
-        return headerPanel;
-    }
+return headerPanel;
+}
 
-    /**
-     * Builds the search bar panel.
-     *
-     * @return The search bar panel.
-     */
-    private JPanel buildSearchBar()
-    {
-        JPanel searchBarPanel = new JPanel(new BorderLayout());
-        searchBarPanel.setOpaque(false);
-        searchBarPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+/**
+    * Builds the search bar panel.
+    *
+    * @return The search bar panel.
+    */
+private JPanel buildSearchBar()
+{
+JPanel searchBarPanel = new JPanel(new BorderLayout());
+searchBarPanel.setOpaque(false);
+searchBarPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
 
-        JPanel searchContainer = new JPanel(new BorderLayout());
-        searchContainer.setBackground(new Color(30, 30, 30));
-        searchContainer.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+JPanel searchContainer = new JPanel(new BorderLayout());
+        searchContainer.setBackground(FIELD_BG);
+        searchContainer.setBorder(new CompoundBorder(
+                new CompoundBorder(new LineBorder(PANEL_BORDER), new MatteBorder(1, 1, 1, 1, PANEL_HIGHLIGHT)),
+                BorderFactory.createEmptyBorder(2, 5, 2, 5)
+        ));
 
-        // Search icon
+// Search icon
         JLabel searchIcon = new JLabel("\uD83D\uDD0D");
-        searchIcon.setForeground(new Color(200, 200, 200));
-        searchIcon.setBorder(new EmptyBorder(0, 5, 0, 5));
-        searchContainer.add(searchIcon, BorderLayout.WEST);
+        searchIcon.setForeground(TEXT_MUTED);
+searchIcon.setBorder(new EmptyBorder(0, 5, 0, 5));
+searchContainer.add(searchIcon, BorderLayout.WEST);
 
-        // Search field
-        JTextField searchField = new JTextField();
-        searchField.setBackground(new Color(45, 45, 45));
-        searchField.setForeground(Color.WHITE);
-        searchField.setBorder(null);
-        searchField.setCaretColor(Color.WHITE);
-        searchField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
-        searchField.addKeyListener(new KeyAdapter()
-        {
-            @Override
-            public void keyReleased(KeyEvent e)
-            {
-                SwingUtilities.invokeLater(() ->
-                {
-                    searchText = searchField.getText().toLowerCase();
-                    updatePanel();
-                });
-            }
-        });
-        searchContainer.add(searchField, BorderLayout.CENTER);
+// Search field
+JTextField searchField = new JTextField();
+        searchField.setBackground(FIELD_BG);
+        searchField.setForeground(TEXT);
+searchField.setBorder(null);
+        searchField.setCaretColor(TEXT);
+searchField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 24));
+searchField.addKeyListener(new KeyAdapter()
+{
+@Override
+public void keyReleased(KeyEvent e)
+{
+SwingUtilities.invokeLater(() ->
+{
+searchText = searchField.getText().toLowerCase();
+updatePanel();
+});
+}
+});
+searchContainer.add(searchField, BorderLayout.CENTER);
 
-        // Clear label to reset search
+// Clear label to reset search
         JLabel clearLabel = new JLabel("❌");
-        clearLabel.setFont(new Font("SansSerif", Font.PLAIN, 9));
-        clearLabel.setForeground(Color.RED);
-        clearLabel.setBorder(new EmptyBorder(0, 6, 0, 6));
-        clearLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        clearLabel.addMouseListener(new java.awt.event.MouseAdapter()
-        {
-            @Override
-            public void mouseClicked(java.awt.event.MouseEvent e)
-            {
-                searchField.setText("");
-                searchText = "";
-                updatePanel();
-            }
-        });
-        searchContainer.add(clearLabel, BorderLayout.EAST);
+        clearLabel.setFont(SMALL_FONT.deriveFont(9f));
+        clearLabel.setForeground(TEXT_MUTED);
+clearLabel.setBorder(new EmptyBorder(0, 6, 0, 6));
+clearLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+clearLabel.addMouseListener(new java.awt.event.MouseAdapter()
+{
+@Override
+public void mouseClicked(java.awt.event.MouseEvent e)
+{
+searchField.setText("");
+searchText = "";
+updatePanel();
+}
+});
+searchContainer.add(clearLabel, BorderLayout.EAST);
 
-        searchBarPanel.add(searchContainer, BorderLayout.CENTER);
-        return searchBarPanel;
-    }
+searchBarPanel.add(searchContainer, BorderLayout.CENTER);
+return searchBarPanel;
+}
 
-    /**
-     * Triggers a manual roll animation when the Roll button is clicked.
-     *
-     * @param e The action event.
-     */
-    private void performManualRoll(java.awt.event.ActionEvent e)
-    {
-        if (rollAnimationManager.isRolling())
-        {
-            return;
-        }
-        List<Integer> locked = new ArrayList<>();
-        for (int id : allTradeableItems)
-        {
-            if (!unlockedItemsManager.isUnlocked(id))
-            {
-                locked.add(id);
-            }
-        }
-        if (locked.isEmpty())
-        {
-            JOptionPane.showMessageDialog(
-                    this,
-                    "All items are unlocked!",
+/**
+    * Triggers a manual roll animation when the Roll button is clicked.
+    *
+    * @param e The action event.
+    */
+private void performManualRoll(java.awt.event.ActionEvent e)
+{
+if (rollAnimationManager.isRolling())
+{
+return;
+}
+List<Integer> locked = new ArrayList<>();
+for (int id : allTradeableItems)
+{
+if (!unlockedItemsManager.isUnlocked(id))
+{
+locked.add(id);
+}
+}
+if (locked.isEmpty())
+{
+JOptionPane.showMessageDialog(
+this,
+"All items are unlocked!",
                     "Choicer",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-            return;
-        }
-        int randomItemId = locked.get(new Random().nextInt(locked.size()));
-        rollAnimationManager.setManualRoll(true);
-        rollAnimationManager.enqueueRoll(randomItemId);
-    }
+JOptionPane.INFORMATION_MESSAGE
+);
+return;
+}
+int randomItemId = locked.get(new Random().nextInt(locked.size()));
+rollAnimationManager.setManualRoll(true);
+rollAnimationManager.enqueueRoll(randomItemId);
+}
 
-    /**
-     * Main update routine: filters the active set (Unlocked or Rolled), applies search text and filter toggles,
-     * updates the single count label, and then builds the item list without trailing gaps.
-     */
-    public void updatePanel()
-    {
-        clientThread.invokeLater(() ->
-        {
-            // Build filtered lists
-            List<Integer> filteredRolled = new ArrayList<>();
-            for (Integer id : rolledItemsManager.getRolledItems())
-            {
-                ItemComposition comp = itemManager.getItemComposition(id);
-                String sanitizedName = sanitizeItemName(comp != null ? comp.getName() : null);
-                if (sanitizedName == null)
-                {
-                    continue;
-                }
-                String lowerName = sanitizedName.toLowerCase();
-                if (searchText.isEmpty() || lowerName.contains(searchText))
-                {
-                    filteredRolled.add(id);
-                }
-            }
+/**
+    * Main update routine: filters the active set (Unlocked or Rolled), applies search text and filter toggles,
+    * updates the single count label, and then builds the item list without trailing gaps.
+    */
+public void updatePanel()
+{
+clientThread.invokeLater(() ->
+{
+// Build filtered lists
+List<Integer> filteredRolled = new ArrayList<>();
+for (Integer id : rolledItemsManager.getRolledItems())
+{
+ItemComposition comp = itemManager.getItemComposition(id);
+String sanitizedName = sanitizeItemName(comp != null ? comp.getName() : null);
+if (sanitizedName == null)
+{
+continue;
+}
+String lowerName = sanitizedName.toLowerCase();
+if (searchText.isEmpty() || lowerName.contains(searchText))
+{
+filteredRolled.add(id);
+}
+}
 
-            Collections.reverse(filteredRolled);
+Collections.reverse(filteredRolled);
 
-            List<Integer> filteredUnlocked = new ArrayList<>();
-            for (Integer id : unlockedItemsManager.getUnlockedItems())
-            {
-                ItemComposition comp = itemManager.getItemComposition(id);
-                String sanitizedName = sanitizeItemName(comp != null ? comp.getName() : null);
-                if (sanitizedName == null)
-                {
-                    continue;
-                }
-                String lowerName = sanitizedName.toLowerCase();
-                if (searchText.isEmpty() || lowerName.contains(searchText))
-                {
-                    filteredUnlocked.add(id);
-                }
-            }
+List<Integer> filteredUnlocked = new ArrayList<>();
+for (Integer id : unlockedItemsManager.getUnlockedItems())
+{
+ItemComposition comp = itemManager.getItemComposition(id);
+String sanitizedName = sanitizeItemName(comp != null ? comp.getName() : null);
+if (sanitizedName == null)
+{
+continue;
+}
+String lowerName = sanitizedName.toLowerCase();
+if (searchText.isEmpty() || lowerName.contains(searchText))
+{
+filteredUnlocked.add(id);
+}
+}
 
-            Collections.reverse(filteredUnlocked);
+Collections.reverse(filteredUnlocked);
 
-            // Apply active filter toggles
-            if (activeFilter.equals("UNLOCKED_NOT_ROLLED"))
-            {
-                filteredUnlocked.removeIf(id -> rolledItemsManager.getRolledItems().contains(id));
-                filteredRolled.clear();
-            }
-            else if (activeFilter.equals("UNLOCKED_AND_ROLLED"))
-            {
-                filteredUnlocked.removeIf(id -> !rolledItemsManager.getRolledItems().contains(id));
-                filteredRolled.removeIf(id -> !unlockedItemsManager.getUnlockedItems().contains(id));
-            }
+// Apply active filter toggles
+if (activeFilter.equals("UNLOCKED_NOT_ROLLED"))
+{
+filteredUnlocked.removeIf(id -> rolledItemsManager.getRolledItems().contains(id));
+filteredRolled.clear();
+}
+else if (activeFilter.equals("UNLOCKED_AND_ROLLED"))
+{
+filteredUnlocked.removeIf(id -> !rolledItemsManager.getRolledItems().contains(id));
+filteredRolled.removeIf(id -> !unlockedItemsManager.getUnlockedItems().contains(id));
+}
 
-            SwingUtilities.invokeLater(() ->
-            {
-                rolledModel.clear();
-                for (int id : filteredRolled)
-                {
-                    rolledModel.addElement(id);
-                }
+SwingUtilities.invokeLater(() ->
+{
+rolledModel.clear();
+for (int id : filteredRolled)
+{
+rolledModel.addElement(id);
+}
 
-                unlockedModel.clear();
-                for (int id : filteredUnlocked)
-                {
-                    unlockedModel.addElement(id);
-                }
+unlockedModel.clear();
+for (int id : filteredUnlocked)
+{
+unlockedModel.addElement(id);
+}
 
-                int total = allTradeableItems.size();
-                countLabel.setText(showingUnlocked
-                        ? "Unlocked: " + unlockedModel.size() + "/" + total
-                        : "Rolled:  " + rolledModel.size()   + "/" + total);
-            });
-        });
-    }
+int total = allTradeableItems.size();
+countLabel.setText(showingUnlocked
+? "Unlocked: " + unlockedModel.size() + "/" + total
+: "Rolled:  " + rolledModel.size()   + "/" + total);
+});
+});
+}
 
-    /**
-     * Retrieves (and caches) the item icon for a given item ID.
-     *
-     * @param itemId The item ID.
-     * @return The ImageIcon for the item, or null if not available.
-     */
-    private ImageIcon getItemIcon(int itemId)
-    {
-        if (itemIconCache.containsKey(itemId))
-        {
-            return itemIconCache.get(itemId);
-        }
-        BufferedImage image = itemManager.getImage(itemId, 1, false);
-        if (image == null)
-        {
-            return null;
-        }
-        ImageIcon icon = new ImageIcon(image);
-        itemIconCache.put(itemId, icon);
-        return icon;
-    }
+/**
+    * Retrieves (and caches) the item icon for a given item ID.
+    *
+    * @param itemId The item ID.
+    * @return The ImageIcon for the item, or null if not available.
+    */
+private ImageIcon getItemIcon(int itemId)
+{
+if (itemIconCache.containsKey(itemId))
+{
+return itemIconCache.get(itemId);
+}
+BufferedImage image = itemManager.getImage(itemId, 1, false);
+if (image == null)
+{
+return null;
+}
+ImageIcon icon = new ImageIcon(image);
+itemIconCache.put(itemId, icon);
+return icon;
+}
 
-    /**
-     * Asynchronously retrieves the item name for a given item ID and passes it to the callback.
-     *
-     * @param itemId   The item ID.
-     * @param callback Consumer to receive the item name.
-     */
-    private void getItemNameAsync(int itemId, Consumer<String> callback)
-    {
-        clientThread.invokeLater(() -> {
-            ItemComposition comp = itemManager.getItemComposition(itemId);
-            String name = sanitizeItemName(comp != null ? comp.getName() : null);
-            SwingUtilities.invokeLater(() -> callback.accept(name != null ? name : "Unknown"));
-        });
-    }
+/**
+    * Asynchronously retrieves the item name for a given item ID and passes it to the callback.
+    *
+    * @param itemId   The item ID.
+    * @param callback Consumer to receive the item name.
+    */
+private void getItemNameAsync(int itemId, Consumer<String> callback)
+{
+clientThread.invokeLater(() -> {
+ItemComposition comp = itemManager.getItemComposition(itemId);
+String name = sanitizeItemName(comp != null ? comp.getName() : null);
+SwingUtilities.invokeLater(() -> callback.accept(name != null ? name : "Unknown"));
+});
+}
 
-    private String sanitizeItemName(String rawName)
-    {
-        if (rawName == null)
-        {
-            return null;
-        }
-        String trimmed = rawName.trim();
-        if (trimmed.isEmpty()
-                || trimmed.equalsIgnoreCase("null")
-                || trimmed.equalsIgnoreCase("Members")
-                || trimmed.equalsIgnoreCase("(Members)")
-                || trimmed.matches("(?i)null\\s*\\(Members\\)"))
-        {
-            return null;
-        }
-        return trimmed;
-    }
+private String sanitizeItemName(String rawName)
+{
+if (rawName == null)
+{
+return null;
+}
+String trimmed = rawName.trim();
+if (trimmed.isEmpty()
+|| trimmed.equalsIgnoreCase("null")
+|| trimmed.equalsIgnoreCase("Members")
+|| trimmed.equalsIgnoreCase("(Members)")
+|| trimmed.matches("(?i)null\\s*\\(Members\\)"))
+{
+return null;
+}
+return trimmed;
+}
 }

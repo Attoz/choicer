@@ -35,7 +35,9 @@ import java.util.concurrent.*;
 @Singleton
 public class DropFetcher
 {
-    private static final String USER_AGENT = "RuneLite-Choicer/1.1.1";
+    private static final String USER_AGENT =
+            "RuneLite-Choicer/" + Optional.ofNullable(DropFetcher.class.getPackage().getImplementationVersion())
+                    .orElse("dev");
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
     private final ClientThread clientThread;

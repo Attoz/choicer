@@ -6,11 +6,13 @@ import com.choicer.ChoicerPanel;
 import com.choicer.RollOverlay;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.audio.AudioPlayer;
 import net.runelite.client.input.MouseAdapter;
 import net.runelite.client.input.MouseManager;
 import net.runelite.client.util.ColorUtil;
@@ -31,6 +33,7 @@ import java.util.concurrent.Executors;
 * It processes roll requests asynchronously and handles the roll animation through the overlay.
 */
 @Singleton
+@Slf4j
 public class RollAnimationManager
 {
 @Inject private ItemManager itemManager;
@@ -39,6 +42,7 @@ public class RollAnimationManager
 @Inject private UnlockedItemsManager unlockedManager;
     @Inject private ChoicerOverlay choicerOverlay;
     @Inject private ChoicerConfig config;
+    @Inject private AudioPlayer audioPlayer;
 @Inject private MouseManager mouseManager;
     @Setter private ChoicerPanel choicerPanel;
 
@@ -48,8 +52,10 @@ private final Queue<Integer> rollQueue = new ConcurrentLinkedQueue<>();
 private ExecutorService executor = Executors.newSingleThreadExecutor();
 private volatile boolean isRolling = false;
 private static final int SNAP_WINDOW_MS = 350;
+    private static final String CONFIRM_SOUND_WAV = "/com/choicer/confirmation.wav";
 private final Random random = new Random();
 private volatile RollOverlay activeOverlayRef;
+    private volatile boolean confirmationSoundUnavailable = false;
 
 @Getter
 @Setter
@@ -57,12 +63,13 @@ private volatile boolean manualRoll = false;
 
 public synchronized void setAllTradeableItems(HashSet<Integer> allTradeableItems)
 {
-        this.allTradeableItems = allTradeableItems;
 if (allTradeableItems == null || allTradeableItems.isEmpty())
 {
+            this.allTradeableItems = new HashSet<>();
 strictlyTradeableItems = Collections.emptySet();
 return;
 }
+        this.allTradeableItems = allTradeableItems;
 
 HashSet<Integer> tradeableOnly = new HashSet<>();
 for (int id : allTradeableItems)
@@ -106,115 +113,124 @@ executor.submit(() -> performRoll(queuedItemId));
     */
 private void performRoll(int queuedItemId)
 {
-        int rollDuration = 3000;
-        List<Integer> choicerOptions = Collections.emptyList();
-        boolean choicerActive = false;
-        if (config.enableChoicer())
-        {
+try
+{
+        int rollDuration = 3600;
             List<Integer> generated = buildChoicerOptions(queuedItemId);
-            if (generated.size() >= 2)
-            {
-                choicerOptions = Collections.unmodifiableList(generated);
-                choicerOverlay.setChoicerOptions(choicerOptions);
-                choicerActive = true;
-            }
-            else
-            {
-                choicerOverlay.setChoicerOptions(Collections.emptyList());
-            }
-        }
-        else
-        {
-            choicerOverlay.setChoicerOptions(Collections.emptyList());
-        }
+            List<Integer> choicerOptions = Collections.unmodifiableList(generated);
+            boolean choicerSelectionActive = !choicerOptions.isEmpty();
+            choicerOverlay.setChoicerOptions(choicerOptions);
 
-        RollOverlay activeOverlay = choicerActive ? choicerOverlay : choicerOverlay;
-        activeOverlayRef = activeOverlay;
-        activeOverlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
+            activeOverlayRef = choicerOverlay;
+            choicerOverlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
 
 try
 {
-            Thread.sleep(rollDuration + SNAP_WINDOW_MS);
-        }
-        catch (InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-        }
+                Thread.sleep(rollDuration + SNAP_WINDOW_MS);
+}
+            catch (InterruptedException e)
+{
+                Thread.currentThread().interrupt();
+}
 
-        int finalRolledItem = activeOverlay.getFinalItem();
-        int itemToUnlock;
-        if (choicerActive)
-        {
-            choicerOverlay.setSelectionPending(true);
+            int finalRolledItem = choicerOverlay.getFinalItem();
+            int itemToUnlock;
+            if (choicerSelectionActive)
+{
+                choicerOverlay.setSelectionPending(true);
+                int selected;
 try
 {
-                itemToUnlock = waitForChoicerSelection(choicerOptions, finalRolledItem);
+                    selected = waitForChoicerSelection(choicerOptions, finalRolledItem);
 }
-            finally
+                finally
 {
-                choicerOverlay.setSelectionPending(false);
-                choicerOverlay.stopAnimation();
+                    choicerOverlay.setSelectionPending(false);
+                }
+                itemToUnlock = selected;
+                long resolveDelay = choicerOverlay.startSelectionResolveAnimation(itemToUnlock);
+                if (resolveDelay > 0)
+                {
+                    try
+                    {
+                        Thread.sleep(resolveDelay);
+                    }
+                    catch (InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                else
+                {
+                    choicerOverlay.stopAnimation();
 }
-        }
-        else
-        {
-            itemToUnlock = finalRolledItem;
-        }
-
-        if (!choicerActive)
-        {
-            int remainingHighlight = Math.max(0, activeOverlay.getHighlightDurationMs() - SNAP_WINDOW_MS);
-            if (remainingHighlight > 0)
-{
-try
-{
-                    Thread.sleep(remainingHighlight);
-}
-                catch (InterruptedException e)
-{
-                    Thread.currentThread().interrupt();
-}
-}
-        }
-
-        if (itemToUnlock != 0)
-        {
-            unlockedManager.unlockItem(itemToUnlock);
-        }
-
-        final boolean wasManualRoll = isManualRoll();
-        final int finalItemToAnnounce = itemToUnlock != 0 ? itemToUnlock : finalRolledItem;
-        final boolean announceChoicer = choicerActive;
-        final int choiceCount = choicerOptions.size();
-        final int queuedId = queuedItemId;
-        clientThread.invoke(() -> {
-            String unlockedTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce), config.unlockedItemColor());
-            String message;
-            if (wasManualRoll)
-{
-                String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
-                message = announceChoicer
-                        ? "Choicer unlocked " + unlockedTag + " after " + pressTag + " presented "
-                        + choiceCount + " choices."
-                        : "Unlocked " + unlockedTag + " by " + pressTag;
 }
             else
 {
-                String rolledTag = ColorUtil.wrapWithColorTag(getItemName(queuedId), config.rolledItemColor());
-                message = announceChoicer
-                        ? "Choicer unlocked " + unlockedTag + " after rolling " + choiceCount
-                        + " choices (first was " + rolledTag + ")."
-                        : "Unlocked " + unlockedTag + " by rolling " + rolledTag;
+                itemToUnlock = finalRolledItem;
 }
-            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
-            if (choicerPanel != null) {
-                SwingUtilities.invokeLater(() -> choicerPanel.updatePanel());
-}
-        });
 
-        setManualRoll(false);
-        isRolling = false;
-        activeOverlayRef = null;
+            if (!choicerSelectionActive)
+{
+                int remainingHighlight = Math.max(0, choicerOverlay.getHighlightDurationMs() - SNAP_WINDOW_MS);
+                if (remainingHighlight > 0)
+                {
+                    try
+                    {
+                        Thread.sleep(remainingHighlight);
+                    }
+                    catch (InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+}
+
+            if (itemToUnlock != 0)
+            {
+                unlockedManager.unlockItem(itemToUnlock);
+}
+
+            final boolean wasManualRoll = isManualRoll();
+            final int finalItemToAnnounce = itemToUnlock != 0 ? itemToUnlock : finalRolledItem;
+            final boolean announceChoicer = choicerSelectionActive;
+            final int choiceCount = choicerOptions.size();
+            final int queuedId = queuedItemId;
+            clientThread.invoke(() -> {
+                String unlockedTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce), config.unlockedItemColor());
+                String message;
+                if (wasManualRoll)
+                {
+                    String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
+                    message = announceChoicer
+                            ? "Choicer unlocked " + unlockedTag + " after " + pressTag + " presented "
+                            + choiceCount + " choices."
+                            : "Unlocked " + unlockedTag + " by " + pressTag;
+                }
+                else
+                {
+                    String rolledTag = ColorUtil.wrapWithColorTag(getItemName(queuedId), config.rolledItemColor());
+                    message = announceChoicer
+                            ? "Choicer unlocked " + unlockedTag + " after rolling " + choiceCount
+                            + " choices (first was " + rolledTag + ")."
+                            : "Unlocked " + unlockedTag + " by rolling " + rolledTag;
+                }
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
+                if (choicerPanel != null) {
+                    SwingUtilities.invokeLater(() -> choicerPanel.updatePanel());
+                }
+            });
+        }
+        catch (Exception e)
+        {
+            log.error("Choicer roll failed", e);
+        }
+        finally
+        {
+            setManualRoll(false);
+            isRolling = false;
+            activeOverlayRef = null;
+        }
 }
 
 /**
@@ -233,6 +249,10 @@ return isRolling;
     */
 public int getRandomLockedItem()
 {
+        if (allTradeableItems == null || allTradeableItems.isEmpty())
+        {
+            return 0;
+        }
 List<Integer> locked = new ArrayList<>();
 for (int id : allTradeableItems)
 {
@@ -415,6 +435,7 @@ public MouseEvent mouseReleased(MouseEvent e)
 Integer hit = blockIfOverButton(e);
 if (hit != null)
 {
+                    playConfirmationSound();
 future.complete(hit);
 }
 return e;
@@ -441,4 +462,51 @@ finally
 mouseManager.unregisterMouseListener(listener);
 }
 }
+
+    private void playConfirmationSound()
+    {
+        if (!config.enableRollSounds())
+        {
+            return;
+        }
+        if (confirmationSoundUnavailable)
+        {
+            return;
+        }
+        try
+        {
+            float volumeDb = toDb(config.rollSoundVolume());
+            if (!playSoundResource(CONFIRM_SOUND_WAV, volumeDb))
+            {
+                confirmationSoundUnavailable = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            log.warn("Choicer: failed to play confirmation sound", ex);
+            confirmationSoundUnavailable = true;
+        }
+    }
+
+    private boolean playSoundResource(String path, float volumeDb)
+            throws Exception
+    {
+        if (RollAnimationManager.class.getResource(path) == null)
+        {
+            return false;
+        }
+        audioPlayer.play(RollAnimationManager.class, path, volumeDb);
+        return true;
+    }
+
+    private static float toDb(int percent)
+    {
+        int p = Math.max(0, Math.min(100, percent));
+        if (p == 0)
+        {
+            return -80.0f;
+        }
+        double lin = p / 100.0;
+        return (float) (20.0 * Math.log10(lin));
+    }
 }

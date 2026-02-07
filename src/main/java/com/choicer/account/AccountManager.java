@@ -1,5 +1,7 @@
 package com.choicer.account;
 
+import com.choicer.managers.RolledItemsManager;
+import com.choicer.managers.ObtainedItemsManager;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.Client;
@@ -14,22 +16,17 @@ import net.runelite.client.eventbus.Subscribe;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import com.choicer.managers.RolledItemsManager;
-import com.choicer.managers.UnlockedItemsManager;
-
 /**
  * Monitors for account changes and updates the stored display name.
  */
 @Singleton
 public class AccountManager
 {
-
 	@Inject
 	private Client client;
 
 	@Inject
-	private UnlockedItemsManager unlockedItemsManager;
-
+	private ObtainedItemsManager obtainedItemsManager;
 	@Inject
 	private RolledItemsManager rolledItemsManager;
 

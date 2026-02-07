@@ -22,58 +22,69 @@ import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
 @Slf4j
 @Singleton
-public class UnlockedItemsManager
+public class ObtainedItemsManager
 {
     private static final int MAX_BACKUPS = 10;
-    private static final String CFG_KEY = "unlocked";
+    private static final String CFG_KEY = "obtained";
+    private static final String FILE_NAME = "choicer_obtained.json";
+    private static final String LEGACY_CFG_KEY = "rolled";
+    private static final String LEGACY_FILE_NAME = "chanceman_rolled.json";
+    private static final String LEGACY_UNLOCKED_FILE = "chanceman_unlocked.json";
+    private static final String LEGACY_CHOICER_UNLOCKED_FILE = "choicer_unlocked.json";
+    private static final String LEGACY_V3_OBTAINED_FILE = "chanceman_obtained.json";
     private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
     private static final long CONFIG_DEBOUNCE_MS = 3000L;
     private static final long SELF_WRITE_GRACE_MS = 1500L;
     private static final long FS_DEBOUNCE_MS = 200L;
-    private static final String FILE_NAME = "choicer_unlocked.json";
+
     private static final Type SET_TYPE = new TypeToken<Set<Integer>>(){}.getType();
-    private final Set<Integer> unlockedItems = Collections.synchronizedSet(new LinkedHashSet<>());
+    private final Set<Integer> obtainedItems = Collections.synchronizedSet(new LinkedHashSet<>());
+
     @Inject private AccountManager accountManager;
     @Inject private Gson gson;
     @Inject private ConfigPersistence configPersistence;
+
     @Setter private ExecutorService executor; // file writes & cloud mirror
     @Setter private Runnable onChange;
+
     private volatile long lastConfigWriteMs = 0L;
     private volatile boolean configWriteWarned = false;
     private volatile boolean dirty = false;
+
     private WatchService watchService;
     private volatile boolean watcherRunning = false;
     private volatile long lastSelfWriteMs = 0L;
     private Thread watcherThread;
 
-    public boolean ready() { return accountManager.getPlayerName() != null; }
-    public boolean isUnlocked(int itemId) { return unlockedItems.contains(itemId); }
+    public boolean isObtained(int itemId) { return obtainedItems.contains(itemId); }
 
     /** Return an immutable snapshot to avoid leaking the synchronizedSet. */
-    public Set<Integer> getUnlockedItems() {
-        synchronized (unlockedItems) {
-            return Collections.unmodifiableSet(new LinkedHashSet<>(unlockedItems));
+    public Set<Integer> getObtainedItems()
+    {
+        synchronized (obtainedItems)
+        {
+            return Collections.unmodifiableSet(new LinkedHashSet<>(obtainedItems));
         }
     }
 
-    public void unlockItem(int itemId)
+    public void markObtained(int itemId)
     {
-        if (unlockedItems.add(itemId))
+        if (obtainedItems.add(itemId))
         {
             dirty = true;
-            saveUnlockedItems();
+            saveObtainedItems();
             safeNotifyChange();
         }
     }
 
-    public void loadUnlockedItems()
+    public void loadObtainedItems()
     {
         reconcileWithCloud(false);
         safeNotifyChange();
     }
 
     /** Normal save: disk + debounced cloud with current time. */
-    public void saveUnlockedItems()
+    public void saveObtainedItems()
     {
         saveInternal(System.currentTimeMillis(), true);
     }
@@ -82,7 +93,7 @@ public class UnlockedItemsManager
     public void startWatching()
     {
         if (watcherRunning) return;
-        Path file = safeGetFilePathOrNull();
+        Path file = safeGetFilePathOrNull(FILE_NAME);
         if (file == null) return;
 
         try
@@ -98,14 +109,13 @@ public class UnlockedItemsManager
         catch (IOException e)
         {
             closeWatchServiceQuietly();
-            log.error("Unlocked watcher: could not register", e);
+            log.error("Obtained watcher: could not register", e);
             return;
         }
 
         watcherRunning = true;
         final String target = file.getFileName().toString();
-
-        watcherThread = new Thread(() -> runWatcherLoop(target), "Choicer-Unlocked-Watcher");
+        watcherThread = new Thread(() -> runWatcherLoop(target), "Choicer-Obtained-Watcher");
         watcherThread.setDaemon(true);
         watcherThread.start();
     }
@@ -122,24 +132,24 @@ public class UnlockedItemsManager
     public void flushIfDirtyOnExit()
     {
         if (!dirty) return;
-        Path file = safeGetFilePathOrNull();
+        Path file = safeGetFilePathOrNull(FILE_NAME);
         if (file == null) return;
 
         try
         {
             rotateBackupIfExists(file);
-            Set<Integer> snap = snapshotUnlocked();
+            Set<Integer> snap = snapshotObtained();
             writeJsonAtomic(file, snap);
             mirrorToCloud(System.currentTimeMillis(), false, snap);
             dirty = false;
         }
         catch (IOException e)
         {
-            log.error("Shutdown flush failed for unlocked items (local saves may be stale).", e);
+            log.error("Shutdown flush failed for obtained items (local saves may be stale).", e);
         }
         catch (Exception e)
         {
-            log.error("Shutdown flush: failed to mirror unlocked set to ConfigManager.", e);
+            log.error("Shutdown flush: failed to mirror obtained set to ConfigManager.", e);
         }
     }
 
@@ -148,29 +158,92 @@ public class UnlockedItemsManager
         String player = accountManager.getPlayerName();
         if (player == null) return;
 
-        Path file = safeGetFilePathOrNull();
-        if (file == null) return;
+        Path newFile = safeGetFilePathOrNull(FILE_NAME);
+        if (newFile == null) return;
 
-        boolean fileExisted = Files.exists(file);
-        Set<Integer> local = readLocalJson(file);
-        long localMtime = fileExisted ? safeLastModified(file) : 0L;
+        boolean newFileExisted = Files.exists(newFile);
 
-        ConfigPersistence.StampedSet cloudStamped = readCloud(player);
-        Set<Integer> cloud = new LinkedHashSet<>(cloudStamped.data);
-        long cloudTs = cloudStamped.ts;
+        migrateLegacyLocalObtainedIfNeeded();
 
-        // LWW
+        // Re-check existence after migration attempt.
+        newFileExisted = Files.exists(newFile);
+
+        // Read local new first; if missing, seed from legacy rolled file (if it still exists)
+        Path legacyFile = safeGetFilePathOrNull(LEGACY_FILE_NAME);
+        Path legacyV3Obtained = safeGetFilePathOrNull(LEGACY_V3_OBTAINED_FILE);
+        Path legacyMarker = safeGetFilePathOrNull(LEGACY_UNLOCKED_FILE);
+        boolean legacyMarkerExists = legacyMarker != null && Files.exists(legacyMarker);
+        boolean legacySeeded = false;
+        Path legacySeedPath = null;
+
+        Set<Integer> localNew = readLocalJson(newFile);
+        Set<Integer> local;
+        if (!localNew.isEmpty() || newFileExisted)
+        {
+            local = localNew;
+        }
+        else
+        {
+            Set<Integer> legacySet = new LinkedHashSet<>();
+            if (legacyV3Obtained != null && Files.exists(legacyV3Obtained))
+            {
+                legacySet = readLocalJson(legacyV3Obtained);
+                legacySeedPath = legacyV3Obtained;
+            }
+            else if (legacyMarkerExists && legacyFile != null && Files.exists(legacyFile))
+            {
+                legacySet = readLocalJson(legacyFile);
+                legacySeedPath = legacyFile;
+            }
+            local = legacySet;
+            legacySeeded = !legacySet.isEmpty();
+        }
+
+        long localMtime = newFileExisted ? safeLastModified(newFile) : 0L;
+
+        // Cloud: new + legacy
+        ConfigPersistence.StampedSet cloudStampedNew = readCloud(player, CFG_KEY);
+        ConfigPersistence.StampedSet cloudStampedLegacy = readCloud(player, LEGACY_CFG_KEY);
+
+        Set<Integer> cloudNew = new LinkedHashSet<>(cloudStampedNew.data);
+        long cloudNewTs = cloudStampedNew.ts;
+
+        Set<Integer> cloudLegacy = new LinkedHashSet<>(cloudStampedLegacy.data);
+        long cloudLegacyTs = cloudStampedLegacy.ts;
+
+        // If new cloud is empty, allow legacy to seed
+        Set<Integer> cloudMerged = new LinkedHashSet<>(cloudNew);
+        if (cloudMerged.isEmpty() && !cloudLegacy.isEmpty())
+        {
+            cloudMerged.addAll(cloudLegacy);
+        }
+
+        long cloudTs = Math.max(cloudNewTs, cloudLegacyTs);
+
+        // LWW between local and (merged) cloud
         Set<Integer> winner;
         Long winnerStamp = null;
         boolean needPersist;
 
-        if (localMtime > cloudTs) { winner = local;  winnerStamp = localMtime; needPersist = true; } // push to cloud
-        else if (cloudTs > localMtime) { winner = cloud;  winnerStamp = cloudTs;    needPersist = true; } // pull to disk
-        else { winner = local;  needPersist = !fileExisted; } // create disk if missing
+        if (localMtime > cloudTs) { winner = local; winnerStamp = localMtime; needPersist = true; }
+        else if (cloudTs > localMtime) { winner = cloudMerged; winnerStamp = cloudTs; needPersist = true; }
+        else { winner = local; needPersist = !newFileExisted; }
 
-        synchronized (unlockedItems) {
-            unlockedItems.clear();
-            unlockedItems.addAll(winner);
+        synchronized (obtainedItems)
+        {
+            obtainedItems.clear();
+            obtainedItems.addAll(winner);
+        }
+        if (legacySeeded && legacySeedPath != null && Files.exists(legacySeedPath) && !newFileExisted)
+        {
+            try
+            {
+                archiveLegacyFile(legacySeedPath);
+            }
+            catch (IOException ioe)
+            {
+                log.error("Failed to archive legacy rolled file during obtained migration", ioe);
+            }
         }
 
         if (needPersist)
@@ -178,7 +251,72 @@ public class UnlockedItemsManager
             long stamp = (winnerStamp != null) ? winnerStamp : System.currentTimeMillis();
             saveInternal(stamp, false); // bypass debounce during reconcile
         }
+
         dirty = false;
+    }
+
+    private void migrateLegacyLocalObtainedIfNeeded()
+    {
+        Path legacyMarker = safeGetFilePathOrNull(LEGACY_UNLOCKED_FILE);
+        Path legacyChoicerUnlocked = safeGetFilePathOrNull(LEGACY_CHOICER_UNLOCKED_FILE);
+        Path legacyV3Obtained = safeGetFilePathOrNull(LEGACY_V3_OBTAINED_FILE);
+        if (legacyMarker == null && legacyChoicerUnlocked == null && legacyV3Obtained == null) return;
+
+        Path obtainedFile = safeGetFilePathOrNull(FILE_NAME);
+        Path legacyObtained = safeGetFilePathOrNull(LEGACY_FILE_NAME);
+        if (obtainedFile == null) return;
+        if (Files.exists(obtainedFile)) return;
+
+        try
+        {
+            boolean legacyMarkerExists = legacyMarker != null && Files.exists(legacyMarker);
+            boolean legacyChoicerUnlockedExists = legacyChoicerUnlocked != null && Files.exists(legacyChoicerUnlocked);
+            boolean legacyV3ObtainedExists = legacyV3Obtained != null && Files.exists(legacyV3Obtained);
+            boolean legacyObtainedExists = legacyObtained != null && Files.exists(legacyObtained);
+
+            Path source = null;
+            if (legacyChoicerUnlockedExists)
+            {
+                source = legacyChoicerUnlocked;
+            }
+            else if (legacyV3ObtainedExists)
+            {
+                source = legacyV3Obtained;
+            }
+            else if (legacyMarkerExists && legacyObtainedExists)
+            {
+                source = legacyObtained;
+            }
+
+            if (source == null) return;
+
+            Set<Integer> legacyData = readLocalJson(source);
+            if (legacyData.isEmpty())
+            {
+                return;
+            }
+
+            Files.createDirectories(obtainedFile.getParent());
+
+            // Move legacy -> new
+            try
+            {
+                Files.move(source, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (IOException moveFail)
+            {
+                Files.copy(source, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+                Files.deleteIfExists(source);
+            }
+
+            log.info("Choicer v3 migration: moved legacy obtained file {} -> {}",
+                    source.getFileName(), obtainedFile.getFileName());
+        }
+        catch (Exception e)
+        {
+            log.error("Choicer v3 migration: failed to migrate legacy obtained file", e);
+            throw new RuntimeException(e);
+        }
     }
 
     /** Disk write + cloud mirror (debounced or immediate). */
@@ -186,28 +324,29 @@ public class UnlockedItemsManager
     {
         if (!isExecutorAvailable())
         {
-            log.error("UnlockedItemsManager: executor unavailable; skipping save");
+            log.error("ObtainedItemsManager: executor unavailable; skipping save");
             return;
         }
 
-        executor.submit(() -> {
-            Path file = safeGetFilePathOrNull();
+        executor.submit(() ->
+        {
+            Path file = safeGetFilePathOrNull(FILE_NAME);
             if (file == null)
             {
-                log.error("UnlockedItemsManager: file path unavailable; skipping save");
+                log.error("ObtainedItemsManager: file path unavailable; skipping save");
                 return;
             }
             try
             {
                 rotateBackupIfExists(file);
-                Set<Integer> snap = snapshotUnlocked();
+                Set<Integer> snap = snapshotObtained();
                 writeJsonAtomic(file, snap);
                 mirrorToCloud(stampMillis, debounced, snap);
                 dirty = false;
             }
             catch (IOException e)
             {
-                log.error("Error saving unlocked items", e);
+                log.error("Error saving obtained items", e);
             }
         });
     }
@@ -222,11 +361,12 @@ public class UnlockedItemsManager
         String player = accountManager.getPlayerName();
         if (player == null || player.isEmpty() || executor == null) return;
 
-        final Set<Integer> snap = (snapshot != null) ? snapshot : snapshotUnlocked();
-        executor.submit(() -> {
+        final Set<Integer> snap = (snapshot != null) ? snapshot : snapshotObtained();
+
+        executor.submit(() ->
+        {
             try
             {
-                // Guard against out-of-order writes across machines/threads
                 configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snap, stampMillis);
             }
             catch (Exception e)
@@ -243,9 +383,9 @@ public class UnlockedItemsManager
     private boolean isExecutorAvailable()
     {
         if (executor == null) return false;
-        if (executor instanceof java.util.concurrent.ThreadPoolExecutor) {
-            java.util.concurrent.ThreadPoolExecutor tpe =
-                    (java.util.concurrent.ThreadPoolExecutor) executor;
+        if (executor instanceof java.util.concurrent.ThreadPoolExecutor)
+        {
+            java.util.concurrent.ThreadPoolExecutor tpe = (java.util.concurrent.ThreadPoolExecutor) executor;
             return !tpe.isShutdown() && !tpe.isTerminated();
         }
         return true;
@@ -254,21 +394,46 @@ public class UnlockedItemsManager
     private void safeNotifyChange()
     {
         Runnable cb = onChange;
-        if (cb != null) { try { cb.run(); } catch (Throwable t) { log.error("onChange threw", t); } }
+        if (cb != null)
+        {
+            try { cb.run(); }
+            catch (Throwable t) { log.error("onChange threw", t); }
+        }
     }
 
-    private Path getFilePath() throws IOException
+    private Path getFilePath(String fileName) throws IOException
     {
         String name = accountManager.getPlayerName();
         if (name == null) throw new IOException("Player name is null");
         Path dir = RUNELITE_DIR.toPath().resolve("choicer").resolve(name);
         Files.createDirectories(dir);
-        return dir.resolve(FILE_NAME);
+        return dir.resolve(fileName);
     }
 
-    private Path safeGetFilePathOrNull()
+    private Path safeGetFilePathOrNull(String fileName)
     {
-        try { return getFilePath(); } catch (IOException ioe) { return null; }
+        try { return getFilePath(fileName); }
+        catch (IOException ioe) { return null; }
+    }
+
+    /** Move a legacy file out of the way so the new domain file name can take over. */
+    private void archiveLegacyFile(Path legacyFile) throws IOException
+    {
+        Path backups = legacyFile.getParent().resolve("backups");
+        Files.createDirectories(backups);
+
+        String ts = new SimpleDateFormat(BACKUP_TS_PATTERN).format(new Date());
+        Path archived = backups.resolve(legacyFile.getFileName() + ".migrated." + ts + ".bak");
+
+        try
+        {
+            Files.move(legacyFile, archived, StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (IOException moveFail)
+        {
+            Files.copy(legacyFile, archived, StandardCopyOption.REPLACE_EXISTING);
+            Files.deleteIfExists(legacyFile);
+        }
     }
 
     /** Windows-safe: COPY current file to a timestamped backup with small retries; then prune. */
@@ -295,9 +460,10 @@ public class UnlockedItemsManager
                 if (attempt >= maxAttempts)
                 {
                     log.error("Backup copy failed after {} attempts for {}", attempt, file, fse);
-                    break; // give up on backup, continue save
+                    break;
                 }
-                try { Thread.sleep(50L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                try { Thread.sleep(50L * attempt); }
+                catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
             }
         }
 
@@ -317,18 +483,35 @@ public class UnlockedItemsManager
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
         try (BufferedWriter w = Files.newBufferedWriter(tmp)) { gson.toJson(data, w); }
         safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        lastSelfWriteMs = System.currentTimeMillis(); // mark AFTER swap
+        lastSelfWriteMs = System.currentTimeMillis();
+    }
+
+    /** Move with fallback when ATOMIC_MOVE not supported. */
+    private void safeMove(Path source, Path target, CopyOption... opts) throws IOException
+    {
+        try
+        {
+            Files.move(source, target, opts);
+        }
+        catch (AtomicMoveNotSupportedException | AccessDeniedException ex)
+        {
+            Set<CopyOption> fallback = new HashSet<>(Arrays.asList(opts));
+            fallback.remove(StandardCopyOption.ATOMIC_MOVE);
+            fallback.add(StandardCopyOption.REPLACE_EXISTING);
+            Files.move(source, target, fallback.toArray(new CopyOption[0]));
+        }
     }
 
     private long safeLastModified(Path file)
     {
-        try { return Files.getLastModifiedTime(file).toMillis(); } catch (IOException e) { return 0L; }
+        try { return Files.getLastModifiedTime(file).toMillis(); }
+        catch (IOException e) { return 0L; }
     }
 
     private Set<Integer> readLocalJson(Path file)
     {
         Set<Integer> local = new LinkedHashSet<>();
-        if (!Files.exists(file)) return local;
+        if (file == null || !Files.exists(file)) return local;
         try (Reader r = Files.newBufferedReader(file))
         {
             Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
@@ -336,20 +519,21 @@ public class UnlockedItemsManager
         }
         catch (IOException e)
         {
-            log.error("Error reading unlocked items JSON", e);
+            log.error("Error reading obtained items JSON", e);
         }
         return local;
     }
 
-    private ConfigPersistence.StampedSet readCloud(String player)
+    private ConfigPersistence.StampedSet readCloud(String player, String key)
     {
-        try { return configPersistence.readStampedSet(player, CFG_KEY); }
+        try { return configPersistence.readStampedSet(player, key); }
         catch (Exception e) { return new ConfigPersistence.StampedSet(new LinkedHashSet<>(), 0L); }
     }
 
     private void closeWatchServiceQuietly()
     {
-        try { if (watchService != null) watchService.close(); } catch (IOException ignored) {}
+        try { if (watchService != null) watchService.close(); }
+        catch (IOException ignored) {}
         watchService = null;
     }
 
@@ -373,11 +557,11 @@ public class UnlockedItemsManager
                         relevant = true;
                     }
                 }
-                if (!key.reset()) break; // exit if key becomes invalid
+                if (!key.reset()) break;
                 if (!relevant) continue;
 
                 long now = System.currentTimeMillis();
-                if (now - lastSelfWriteMs <= SELF_WRITE_GRACE_MS) continue; // our own write
+                if (now - lastSelfWriteMs <= SELF_WRITE_GRACE_MS) continue;
                 if (now - lastHandled < FS_DEBOUNCE_MS) continue;
                 lastHandled = now;
 
@@ -388,7 +572,7 @@ public class UnlockedItemsManager
                 }
                 catch (Throwable t)
                 {
-                    log.error("Unlocked watcher reconcile failed", t);
+                    log.error("Obtained watcher reconcile failed", t);
                 }
             }
         }
@@ -399,26 +583,12 @@ public class UnlockedItemsManager
         }
     }
 
-    /** Move with fallback when ATOMIC_MOVE not supported. */
-    private void safeMove(Path source, Path target, CopyOption... opts) throws IOException
-    {
-        try
-        {
-            Files.move(source, target, opts);
-        }
-        catch (AtomicMoveNotSupportedException | AccessDeniedException ex)
-        {
-            Set<CopyOption> fallback = new HashSet<>(Arrays.asList(opts));
-            fallback.remove(StandardCopyOption.ATOMIC_MOVE);
-            fallback.add(StandardCopyOption.REPLACE_EXISTING);
-            Files.move(source, target, fallback.toArray(new CopyOption[0]));
-        }
-    }
-
     /** Take a consistent snapshot under the set's monitor. */
-    private Set<Integer> snapshotUnlocked() {
-        synchronized (unlockedItems) {
-            return new LinkedHashSet<>(unlockedItems);
+    private Set<Integer> snapshotObtained()
+    {
+        synchronized (obtainedItems)
+        {
+            return new LinkedHashSet<>(obtainedItems);
         }
     }
 }

@@ -1,10 +1,10 @@
 package com.choicer.ui;
 
-import com.choicer.ChoicerPlugin;
+import com.choicer.managers.RolledItemsManager;
 import com.choicer.filters.EnsouledHeadMapping;
 import com.choicer.menus.EnabledUI;
-import com.choicer.managers.UnlockedItemsManager;
-
+import com.choicer.ChoicerPlugin;
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -28,7 +28,7 @@ import java.util.Set;
 @Singleton
 public class ItemDimmerController {
     private final Client client;
-    private final UnlockedItemsManager unlockedItemsManager;
+    private final RolledItemsManager rolledItemsManager;
     private final ItemManager itemManager;
     private final ChoicerPlugin plugin;
 
@@ -42,12 +42,12 @@ public class ItemDimmerController {
     @Inject
     public ItemDimmerController(
             Client client,
-            UnlockedItemsManager unlockedItemsManager,
+            RolledItemsManager rolledItemsManager,
             ItemManager itemManager,
             ChoicerPlugin plugin
     ) {
         this.client = client;
-        this.unlockedItemsManager = unlockedItemsManager;
+        this.rolledItemsManager = rolledItemsManager;
         this.itemManager = itemManager;
         this.plugin = plugin;
     }
@@ -134,7 +134,7 @@ public class ItemDimmerController {
         final int canonicalItemId = canonicalize(mappedItemId);
         if (canonicalItemId <= 0) return false;
         if (!plugin.isInPlay(canonicalItemId)) return false;
-        return !isUnlocked(mappedItemId, canonicalItemId);
+        return !isRolled(mappedItemId, canonicalItemId);
     }
 
     private int canonicalize(int rawItemId) {
@@ -146,13 +146,13 @@ public class ItemDimmerController {
         }
     }
 
-    private boolean isUnlocked(int normalizedItemId, int canonicalItemId) {
-        if (unlockedItemsManager == null) return true; // fail open if manager missing
+    private boolean isRolled(int normalizedItemId, int canonicalItemId) {
+        if (rolledItemsManager  == null) return true; // fail open if manager missing
 
         try {
-            // Fast paths: raw or canonical known unlocked
-            if (normalizedItemId > 0 && unlockedItemsManager.isUnlocked(normalizedItemId)) return true;
-            if (canonicalItemId > 0 && normalizedItemId != canonicalItemId && unlockedItemsManager.isUnlocked(canonicalItemId))
+            // Fast paths: raw or canonical known obtained
+            if (normalizedItemId > 0 && rolledItemsManager.isRolled(normalizedItemId)) return true;
+            if (canonicalItemId > 0 && normalizedItemId != canonicalItemId && obtainedItemSubCheck(canonicalItemId))
                 return true;
 
             // Slower path: related ids (placeholders / noted variants)
@@ -166,7 +166,7 @@ public class ItemDimmerController {
             }
 
             for (int id : candidates) {
-                if (id > 0 && unlockedItemsManager.isUnlocked(id)) {
+                if (id > 0 && obtainedItemSubCheck(id)) {
                     return true;
                 }
             }
@@ -175,6 +175,14 @@ public class ItemDimmerController {
         }
 
         return false;
+    }
+
+    private boolean obtainedItemSubCheck(int itemId) {
+        try {
+            return rolledItemsManager.isRolled(itemId);
+        } catch (Exception e) {
+            return true; // fail open if manager misbehaves
+        }
     }
 
     private void collectRelatedIds(int itemId, Set<Integer> sink) {

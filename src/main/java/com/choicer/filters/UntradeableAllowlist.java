@@ -7,7 +7,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Tracks the set of untradeable item IDs that can participate in Chocier rolls
+ * Tracks the set of untradeable item IDs that can participate in Choicer rolls
  * when the Include Untradeable config toggle is enabled.
  */
 public final class UntradeableAllowlist

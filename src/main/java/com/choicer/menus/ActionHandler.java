@@ -1,21 +1,23 @@
 package com.choicer.menus;
 
-import com.choicer.ChoicerPlugin;
 import com.choicer.ChoicerConfig;
+import com.choicer.ChoicerPlugin;
 import com.choicer.filters.EnsouledHeadMapping;
-import com.choicer.managers.UnlockedItemsManager;
-
+import com.choicer.managers.RolledItemsManager;
 import lombok.Getter;
 import lombok.Setter;
-import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
+import net.runelite.api.Client;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -31,7 +33,6 @@ import java.util.function.Consumer;
 @Singleton
 public class ActionHandler {
 
-
 	private static final Set<MenuAction> disabledActions = EnumSet.of(
 			MenuAction.CC_OP,               // inventory “Use” on locked
 			MenuAction.WIDGET_TARGET,       // “Use” on widgets
@@ -45,6 +46,21 @@ public class ActionHandler {
 			MenuAction.GROUND_ITEM_FOURTH_OPTION,
 			MenuAction.GROUND_ITEM_FIFTH_OPTION
 	);
+
+	private static final Set<Integer> ALWAYS_ALLOW_OBJECT_IDS = new HashSet<>();
+
+	private static final EnumSet<MenuAction> GAME_OBJECT_ACTIONS = EnumSet.of(
+			MenuAction.GAME_OBJECT_FIRST_OPTION,
+			MenuAction.GAME_OBJECT_SECOND_OPTION,
+			MenuAction.GAME_OBJECT_THIRD_OPTION,
+			MenuAction.GAME_OBJECT_FOURTH_OPTION,
+			MenuAction.GAME_OBJECT_FIFTH_OPTION
+	);
+
+	static
+	{
+		ALWAYS_ALLOW_OBJECT_IDS.add(net.runelite.api.gameval.ObjectID.CATABOW);
+	}
 
 	private static final int ORBS_GROUP = (InterfaceID.Orbs.UNIVERSE >>> 16);
 
@@ -79,7 +95,7 @@ public class ActionHandler {
 	@Inject
 	private Restrictions restrictions;
 	@Inject
-	private UnlockedItemsManager unlockedItemsManager;
+	private RolledItemsManager rolledItemsManager;
 	@Getter
 	@Setter
 	private int enabledUIOpen = -1;
@@ -107,7 +123,7 @@ public class ActionHandler {
 	}
 
 	private boolean inactive() {
-		if (!unlockedItemsManager.ready()) return true;
+		if (!rolledItemsManager.ready()) return true;
 		return client.getGameState().getState() < GameState.LOADING.getState();
 	}
 
@@ -149,9 +165,9 @@ public class ActionHandler {
 			entry.setOption("<col=808080>" + option);
 			entry.setTarget("<col=808080>" + target);
 			entry.onClick(DISABLED);
-            if (config.deprioritizeLockedOptions()) {
-                entry.setDeprioritized(true);
-            }
+			if (config.deprioritizeLockedOptions()) {
+				entry.setDeprioritized(true);
+			}
 		}
 	}
 
@@ -163,7 +179,7 @@ public class ActionHandler {
 			return;
 		}
 		// Extra safeguard for ground items.
-		handleGroundItems(plugin.getItemManager(), unlockedItemsManager, event, plugin);
+		handleGroundItems(plugin.getItemManager(), rolledItemsManager, event, plugin);
 	}
 
 	/**
@@ -181,7 +197,8 @@ public class ActionHandler {
 	private boolean isLockedGroundItem(int itemId)
 	{
 		return plugin.isInPlay(itemId)
-				&& !unlockedItemsManager.isUnlocked(itemId);
+				&& !plugin.isNotTracked(itemId)
+				&& !rolledItemsManager.isRolled(itemId);
 	}
 
 	private boolean isHealthOrbCure(MenuEntry entry)
@@ -217,13 +234,26 @@ public class ActionHandler {
 			return true;
 		}
 
-		// Always allow "Drop"
+		// Allowlisted world objects bypass all restrictions
+		if (GAME_OBJECT_ACTIONS.contains(action) && ALWAYS_ALLOW_OBJECT_IDS.contains(entry.getIdentifier()))
+		{
+			return true;
+		}
+
+		// Always allow "Drop" / "Check"
 		if (option.equalsIgnoreCase("drop") || option.equalsIgnoreCase("check"))
 			return true;
 		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub"))
 		{
 			if (!plugin.isInPlay(id)) { return true; }
-			return unlockedItemsManager.isUnlocked(id);
+			return rolledItemsManager.isRolled(id);
+		}
+		if ("harpoon".equalsIgnoreCase(option)
+				&& !hasAnyHarpoonInInvOrWorn())
+		{
+			String t = target.toLowerCase();
+			if (t.contains("fishing spot") || t.contains("spirit pool"))
+				return true;
 		}
 		if (SkillOp.isSkillOp(option))
 			return restrictions.isSkillOpEnabled(option);
@@ -237,14 +267,14 @@ public class ActionHandler {
 			return true;
 		if (id == 0 || id == -1 || !plugin.isInPlay(id))
 			return true;
-		return unlockedItemsManager.isUnlocked(id);
+		return rolledItemsManager.isRolled(id);
 	}
 
 	/**
 	 * A static helper to further safeguard ground item actions.
 	 * If a ground item is locked, this method consumes the event.
 	 */
-	public static void handleGroundItems(ItemManager itemManager, UnlockedItemsManager unlockedItemsManager,
+	public static void handleGroundItems(ItemManager itemManager, RolledItemsManager rolledItemsManager,
 										 MenuOptionClicked event, ChoicerPlugin plugin) {
 		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
 			int rawItemId = event.getId() != -1
@@ -253,10 +283,41 @@ public class ActionHandler {
 			int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
 			int canonicalGroundId = itemManager.canonicalize(mapped);
 			if (plugin.isInPlay(canonicalGroundId)
-					&& unlockedItemsManager != null
-					&& !unlockedItemsManager.isUnlocked(canonicalGroundId)) {
+					&& !plugin.isNotTracked(canonicalGroundId)
+					&& rolledItemsManager != null
+					&& !rolledItemsManager.isRolled(canonicalGroundId)) {
 				event.consume();
 			}
 		}
+	}
+
+	/**
+	 Checks for harpoon in inventory and worn items for
+	 barbarian fishing.
+	 **/
+	private boolean hasAnyHarpoonInInvOrWorn()
+	{
+		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+		ItemContainer inv  = client.getItemContainer(InventoryID.INV);
+
+		if (worn != null)
+		{
+			for (Item item : worn.getItems())
+			{
+				SkillItem si = SkillItem.fromId(item.getId());
+				if (si != null && si.getSkillOp() == SkillOp.HARPOON) return true;
+			}
+		}
+
+		if (inv != null)
+		{
+			for (Item item : inv.getItems())
+			{
+				SkillItem si = SkillItem.fromId(item.getId());
+				if (si != null && si.getSkillOp() == SkillOp.HARPOON) return true;
+			}
+		}
+
+		return false;
 	}
 }

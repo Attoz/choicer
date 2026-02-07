@@ -10,14 +10,18 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
+import net.runelite.client.util.ImageUtil;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.awt.LinearGradientPaint;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,6 +30,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.awt.event.MouseEvent;
 import java.util.function.Supplier;
 
 /**
@@ -250,17 +256,9 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         synchronized (columnHitboxes)
         {
             List<Rectangle> copy = new ArrayList<>(columnHitboxes.size());
-            Rectangle bounds = getBounds();
-            int offsetX = bounds != null ? bounds.x : 0;
-            int offsetY = bounds != null ? bounds.y : 0;
             for (Rectangle rect : columnHitboxes)
             {
-                copy.add(new Rectangle(
-                        rect.x - offsetX,
-                        rect.y - offsetY,
-                        rect.width,
-                        rect.height
-                ));
+                copy.add(new Rectangle(rect));
             }
             return copy;
         }

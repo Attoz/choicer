@@ -15,20 +15,19 @@ import com.choicer.ui.DropsTabUI;
 import com.choicer.ui.DropsTooltipOverlay;
 import com.choicer.ui.MusicWidgetController;
 import com.choicer.ui.NpcSearchService;
-import com.choicer.managers.RollAnimationManager;
-import com.choicer.managers.RolledItemsManager;
-import com.choicer.managers.UnlockedItemsManager;
 import com.choicer.ui.MusicSearchButton;
 import com.choicer.ui.ItemDimmerController;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import com.choicer.managers.RollAnimationManager;
+import com.choicer.managers.RolledItemsManager;
+import com.choicer.managers.ObtainedItemsManager;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
-import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
@@ -50,7 +49,7 @@ import java.util.concurrent.Executors;
 @Slf4j
 @PluginDescriptor(
         name = "Choicer",
-        description = "Extended ChanceMan with choices",
+        description = "Unlock items by rolling multiple choices",
         tags = {"chance", "roll", "lock", "unlock", "luck", "game of chance", "goc", "choices"}
 )
 public class ChoicerPlugin extends Plugin
@@ -59,7 +58,6 @@ public class ChoicerPlugin extends Plugin
     @Inject private ClientThread clientThread;
     @Inject private ClientToolbar clientToolbar;
     @Inject private OverlayManager overlayManager;
-    @Inject private ChatMessageManager chatMessageManager;
     @Getter @Inject private ItemManager itemManager;
     @Inject private ChoicerOverlay choicerOverlay;
     @Inject private DropsTooltipOverlay dropsTooltipOverlay;
@@ -67,7 +65,7 @@ public class ChoicerPlugin extends Plugin
     @Inject private ChoicerConfig config;
     @Inject private ConfigManager configManager;
     @Inject private AccountManager accountManager;
-    @Inject private UnlockedItemsManager unlockedItemsManager;
+    @Inject private ObtainedItemsManager obtainedItemsManager;
     @Inject private RolledItemsManager rolledItemsManager;
     @Inject private RollAnimationManager rollAnimationManager;
     @Inject private EventBus eventBus;
@@ -85,7 +83,7 @@ public class ChoicerPlugin extends Plugin
     private ExecutorService fileExecutor;
     @Getter private final HashSet<Integer> allTradeableItems = new LinkedHashSet<>();
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
-    private boolean tradeableItemsInitialized = false;
+    private volatile boolean tradeableItemsInitialized = false;
     private boolean featuresActive = false;
 
     @Provides
@@ -127,21 +125,21 @@ public class ChoicerPlugin extends Plugin
             t.setDaemon(true);
             return t;
         });
-        unlockedItemsManager.setExecutor(fileExecutor);
+        obtainedItemsManager.setExecutor(fileExecutor);
         rolledItemsManager.setExecutor(fileExecutor);
 
         if (accountManager.ready())
         {
             Runnable refreshPanel = () -> {
-                if ( choicerPanel != null) {
+                if (choicerPanel != null) {
                     SwingUtilities.invokeLater(choicerPanel::updatePanel);
                 }
                 refreshDropsViewerIfOpen();
             };
-            unlockedItemsManager.setOnChange(refreshPanel);
+            obtainedItemsManager.setOnChange(refreshPanel);
             rolledItemsManager.setOnChange(refreshPanel);
 
-            unlockedItemsManager.loadUnlockedItems();
+            obtainedItemsManager.loadObtainedItems();
             rolledItemsManager.loadRolledItems();
         }
 
@@ -152,7 +150,7 @@ public class ChoicerPlugin extends Plugin
         dropsTabUI.startUp();
 
         choicerPanel = new ChoicerPanel(
-                unlockedItemsManager,
+                obtainedItemsManager,
                 rolledItemsManager,
                 itemManager,
                 allTradeableItems,
@@ -165,7 +163,7 @@ public class ChoicerPlugin extends Plugin
 
         if (accountManager.ready())
         {
-            unlockedItemsManager.startWatching();
+            obtainedItemsManager.startWatching();
             rolledItemsManager.startWatching();
         }
 
@@ -183,6 +181,8 @@ public class ChoicerPlugin extends Plugin
         eventBus.register(musicWidgetController);
         eventBus.register(musicSearchButton);
         musicSearchButton.onStart();
+        tradeableItemsInitialized = false;
+        rollAnimationManager.setAllTradeableItems(Collections.<Integer>emptySet());
     }
 
     private void disableFeatures()
@@ -192,9 +192,9 @@ public class ChoicerPlugin extends Plugin
 
         try
         {
-            if (unlockedItemsManager != null) unlockedItemsManager.stopWatching();
+            if (obtainedItemsManager != null) obtainedItemsManager.stopWatching();
             if (rolledItemsManager != null)   rolledItemsManager.stopWatching();
-            if (unlockedItemsManager != null) unlockedItemsManager.flushIfDirtyOnExit();
+            if (obtainedItemsManager != null) obtainedItemsManager.flushIfDirtyOnExit();
             if (rolledItemsManager != null) rolledItemsManager.flushIfDirtyOnExit();
         }
         catch (Exception ignored) { /* Non-fatal */ }
@@ -227,10 +227,10 @@ public class ChoicerPlugin extends Plugin
             fileExecutor.shutdownNow();
             fileExecutor = null;
 
-            if (unlockedItemsManager != null)
+            if (obtainedItemsManager != null)
             {
-                unlockedItemsManager.setExecutor(null);
-                unlockedItemsManager.setOnChange(null);
+                obtainedItemsManager.setExecutor(null);
+                obtainedItemsManager.setOnChange(null);
             }
             if (rolledItemsManager != null)
             {
@@ -245,6 +245,7 @@ public class ChoicerPlugin extends Plugin
         choicerPanel = null;
         allTradeableItems.clear();
         tradeableItemsInitialized = false;
+        rollAnimationManager.setAllTradeableItems(Collections.emptySet());
         accountManager.reset();
     }
 
@@ -256,19 +257,39 @@ public class ChoicerPlugin extends Plugin
     }
 
     /** Refreshes the list of tradeable item IDs based on the current configuration. */
-    public void refreshTradeableItems() {
-        clientThread.invokeLater(() -> {
-            Set<Integer> unlockedSnapshot = unlockedItemsManager.getUnlockedItems();
+    public void refreshTradeableItems()
+    {
+        clientThread.invokeLater(() ->
+        {
+            tradeableItemsInitialized = false;
+
             allTradeableItems.clear();
-            for (int i = 0; i < 40000; i++) {
+            for (int i = 0; i < 40000; i++)
+            {
                 ItemComposition comp = itemManager.getItemComposition(i);
-                if (isEligibleForLocking(i, comp, unlockedSnapshot)) {
+                if (comp != null && comp.isTradeable() && !isNotTracked(i)
+                        && !ItemsFilter.isBlocked(i, config))
+                {
+                    if (config.freeToPlay() && comp.isMembers())
+                    {
+                        continue;
+                    }
+                    if (!ItemsFilter.isPoisonEligible(i, config.requireWeaponPoison(),
+                            rolledItemsManager.getRolledItems()))
+                    {
+                        continue;
+                    }
                     allTradeableItems.add(i);
                 }
             }
             rollAnimationManager.setAllTradeableItems(allTradeableItems);
-            if (choicerPanel != null) {
-                SwingUtilities.invokeLater(() -> choicerPanel.updatePanel());
+
+            // Only now mark initialized (prevents early rolls on login/inventory scan).
+            tradeableItemsInitialized = true;
+
+            if (choicerPanel != null)
+            {
+                SwingUtilities.invokeLater(choicerPanel::updatePanel);
             }
         });
     }
@@ -311,22 +332,19 @@ public class ChoicerPlugin extends Plugin
         if (!featuresActive) return;
         dropCache.pruneOldCaches();
 
-        // Stop watchers around the reload
-        unlockedItemsManager.stopWatching();
+        obtainedItemsManager.stopWatching();
         rolledItemsManager.stopWatching();
 
-        // Reload data
-        unlockedItemsManager.loadUnlockedItems();
+        obtainedItemsManager.loadObtainedItems();
         rolledItemsManager.loadRolledItems();
 
-        // Ensure UI reflects new account state
+        refreshTradeableItems();
         if (choicerPanel != null)
         {
-            SwingUtilities.invokeLater(() -> choicerPanel.updatePanel());
+            SwingUtilities.invokeLater(choicerPanel::updatePanel);
         }
 
-        // Restart watchers
-        unlockedItemsManager.startWatching();
+        obtainedItemsManager.startWatching();
         rolledItemsManager.startWatching();
     }
 
@@ -337,10 +355,12 @@ public class ChoicerPlugin extends Plugin
         if (!tradeableItemsInitialized && client.getGameState() == GameState.LOGGED_IN)
         {
             refreshTradeableItems();
-            tradeableItemsInitialized = true;
         }
 
-        rollAnimationManager.process();
+        if (tradeableItemsInitialized)
+        {
+            rollAnimationManager.process();
+        }
     }
 
     @Subscribe
@@ -350,24 +370,29 @@ public class ChoicerPlugin extends Plugin
         if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT) { killSearchResults(); }
     }
 
-    private void killSearchResults() {
+    private void killSearchResults()
+    {
         Widget geSearchResults = client.getWidget(162, 51);
-        if (geSearchResults == null) {
+        if (geSearchResults == null)
+        {
             return;
         }
         Widget[] children = geSearchResults.getDynamicChildren();
-        if (children == null || children.length < 2 || children.length % 3 != 0) {
+        if (children == null || children.length < 2 || children.length % 3 != 0)
+        {
             return;
         }
-        Set<Integer> unlocked = unlockedItemsManager.getUnlockedItems();
+        Set<Integer> obtained = obtainedItemsManager.getObtainedItems();
         Set<Integer> rolled = rolledItemsManager.getRolledItems();
         boolean requireRolled = config.requireRolledUnlockedForGe();
-        for (int i = 0; i < children.length; i += 3) {
+        for (int i = 0; i < children.length; i += 3)
+        {
             int offerItemId = children[i + 2].getItemId();
-            boolean isUnlocked = unlocked.contains(offerItemId);
+            boolean isObtained = obtained.contains(offerItemId);
             boolean isRolled = rolled.contains(offerItemId);
-            boolean hide = requireRolled ? !(isUnlocked && isRolled) : !isUnlocked;
-            if (hide) {
+            boolean hide = requireRolled ? !(isObtained && isRolled) : !isRolled;
+            if (hide)
+            {
                 children[i].setHidden(true);
                 children[i + 1].setOpacity(70);
                 children[i + 2].setOpacity(70);
@@ -375,11 +400,18 @@ public class ChoicerPlugin extends Plugin
         }
     }
 
+    private boolean canProcessItemEvents()
+    {
+        return featuresActive
+                && accountManager.ready()
+                && tradeableItemsInitialized
+                && rollAnimationManager.hasTradeablesReady();
+    }
+
     @Subscribe
     public void onItemSpawned(ItemSpawned event)
     {
-        if (!featuresActive) return;
-        if (!accountManager.ready()) return;
+        if (!canProcessItemEvents()) return;
 
         TileItem tileItem = (TileItem) event.getItem();
         int itemId = EnsouledHeadMapping.toTradeableId(tileItem.getId());
@@ -392,14 +424,10 @@ public class ChoicerPlugin extends Plugin
         {
             return;
         }
-        if (rolledItemsManager == null)
+        if (!obtainedItemsManager.isObtained(canonicalItemId))
         {
-            return;
-        }
-        if (!rolledItemsManager.isRolled(canonicalItemId))
-        {
+            obtainedItemsManager.markObtained(canonicalItemId);
             rollAnimationManager.enqueueRoll(canonicalItemId);
-            rolledItemsManager.markRolled(canonicalItemId);
             refreshDropsViewerIfOpen();
         }
     }
@@ -407,8 +435,7 @@ public class ChoicerPlugin extends Plugin
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged event)
     {
-        if (!featuresActive) return;
-        if (!accountManager.ready()) return;
+        if (!canProcessItemEvents()) return;
 
         if (event.getContainerId() == 93)
         {
@@ -422,10 +449,11 @@ public class ChoicerPlugin extends Plugin
                 {
                     continue;
                 }
-                if (!processed.contains(canonicalId) && !rolledItemsManager.isRolled(canonicalId))
+
+                if (!processed.contains(canonicalId) && !obtainedItemsManager.isObtained(canonicalId))
                 {
+                    obtainedItemsManager.markObtained(canonicalId);
                     rollAnimationManager.enqueueRoll(canonicalId);
-                    rolledItemsManager.markRolled(canonicalId);
                     processed.add(canonicalId);
                 }
             }
@@ -478,7 +506,7 @@ public class ChoicerPlugin extends Plugin
             return false;
         }
         int canonicalItemId = itemManager.canonicalize(itemId);
-        Set<Integer> unlocked = unlockedSnapshot != null ? unlockedSnapshot : unlockedItemsManager.getUnlockedItems();
+        Set<Integer> unlocked = unlockedSnapshot != null ? unlockedSnapshot : rolledItemsManager.getRolledItems();
         ItemAttributes attributes = ItemAttributes.from(comp);
         return ItemEligibility.shouldInclude(
                 attributes,

@@ -5,6 +5,7 @@ import net.runelite.api.Client;
 import net.runelite.api.events.VarClientIntChanged;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.eventbus.Subscribe;
+import com.choicer.ChoicerConfig;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -16,17 +17,20 @@ public class TabListener
     private final Client client;
     private final ClientThread clientThread;
     private final MusicWidgetController widgetController;
+    private final ChoicerConfig config;
 
     @Inject
     public TabListener(
             Client client,
             ClientThread clientThread,
-            MusicWidgetController widgetController
+            MusicWidgetController widgetController,
+            ChoicerConfig config
     )
     {
         this.client = client;
         this.clientThread = clientThread;
         this.widgetController = widgetController;
+        this.config = config;
     }
 
     @Subscribe
@@ -37,9 +41,15 @@ public class TabListener
         int newTab = client.getVarcIntValue(171);
         if (widgetController.isOverrideActive() && newTab != 13)
         {
-            clientThread.invokeLater(widgetController::restore);
+            if (!config.showDropsAlwaysOpen())
+            {
+                clientThread.invokeLater(widgetController::restore);
+            }
+            return;
         }
-        else if (!widgetController.isOverrideActive() && newTab == 13 && widgetController.hasData())
+
+        // If returning to the music tab and we have cached drops data, re-apply
+        if (!widgetController.isOverrideActive() && newTab == 13 && widgetController.hasData())
         {
             clientThread.invokeLater(() ->
                     widgetController.override(widgetController.getCurrentData())

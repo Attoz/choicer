@@ -205,4 +205,15 @@ public interface ChoicerConfig extends Config
     {
         return 5;
     }
+
+    @ConfigItem(
+            keyName = "devResetChoicerState",
+            name = "DEV: Reset Local + Cloud Data",
+            description = "For development/testing/video capture. When enabled, clears all local choicer_*.json files and synced cloud state for the current account, then auto-unchecks.",
+            position = 19
+    )
+    default boolean devResetChoicerState()
+    {
+        return false;
+    }
 }

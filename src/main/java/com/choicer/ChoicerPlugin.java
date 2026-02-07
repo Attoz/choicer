@@ -42,9 +42,15 @@ import net.runelite.client.config.ConfigManager;
 import javax.inject.Inject;
 import javax.swing.*;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
 @Slf4j
 @PluginDescriptor(
@@ -301,6 +307,9 @@ public class ChoicerPlugin extends Plugin
         if (!event.getGroup().equals("choicer")) return;
         switch (event.getKey())
         {
+            case "devResetChoicerState":
+                handleDevResetChoicerState(event);
+                break;
             case "freeToPlay":
             case "includeF2PTradeOnlyItems":
             case "enableFlatpacks":
@@ -324,6 +333,93 @@ public class ChoicerPlugin extends Plugin
                 itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
                 break;
         }
+    }
+
+    private void handleDevResetChoicerState(net.runelite.client.events.ConfigChanged event)
+    {
+        if (!Boolean.parseBoolean(event.getNewValue()))
+        {
+            return;
+        }
+
+        try
+        {
+            resetChoicerStateForCurrentAccount();
+        }
+        finally
+        {
+            configManager.setConfiguration("choicer", "devResetChoicerState", false);
+        }
+    }
+
+    private void resetChoicerStateForCurrentAccount()
+    {
+        String player = accountManager.getPlayerName();
+        if (player == null || player.isEmpty())
+        {
+            log.warn("Choicer dev reset skipped: account is not ready.");
+            return;
+        }
+
+        obtainedItemsManager.stopWatching();
+        rolledItemsManager.stopWatching();
+        try
+        {
+            clearLocalChoicerJsons(player);
+            clearCloudChoicerKeys(player);
+
+            obtainedItemsManager.loadObtainedItems();
+            rolledItemsManager.loadRolledItems();
+        }
+        finally
+        {
+            if (featuresActive && accountManager.ready())
+            {
+                obtainedItemsManager.startWatching();
+                rolledItemsManager.startWatching();
+            }
+        }
+
+        refreshTradeableItems();
+        if (choicerPanel != null)
+        {
+            SwingUtilities.invokeLater(choicerPanel::updatePanel);
+        }
+        refreshDropsViewerIfOpen();
+    }
+
+    private void clearLocalChoicerJsons(String player)
+    {
+        Path dir = RUNELITE_DIR.toPath().resolve("choicer").resolve(player);
+        if (!Files.exists(dir))
+        {
+            return;
+        }
+
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "choicer_*.json"))
+        {
+            for (Path p : stream)
+            {
+                Files.deleteIfExists(p);
+            }
+        }
+        catch (IOException e)
+        {
+            log.warn("Failed to clear local Choicer JSON files for {}", player, e);
+        }
+    }
+
+    private void clearCloudChoicerKeys(String player)
+    {
+        clearCloudStampedSet(player, "obtained");
+        clearCloudStampedSet(player, "rolled");
+        clearCloudStampedSet(player, "unlocked");
+    }
+
+    private void clearCloudStampedSet(String player, String key)
+    {
+        configManager.unsetConfiguration("choicer", key + "." + player + ".data");
+        configManager.unsetConfiguration("choicer", key + "." + player + ".ts");
     }
 
     @Subscribe

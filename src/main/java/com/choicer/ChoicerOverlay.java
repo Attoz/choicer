@@ -569,6 +569,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     final boolean goNext = (snapResidualStart / activeStep) >= SNAP_NEXT_THRESHOLD;
                     winnerDelta = goNext ? 1 : 0;
                     snapTarget = goNext ? (snapBase + activeStep) : snapBase;
+                    if (snapTarget < rollOffset)
+                    {
+                        snapTarget += activeStep;
+                        winnerDelta = 1;
+                    }
                 }
 
                 if (!highlightPhase) {
@@ -579,9 +584,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         final float end = snapTarget;
                         rollOffset = start + (end - start) * s;
 
-                        if (rollOffset >= activeStep) {
-                            normalizeOnce(activeStep);
-                            winnerDelta = 0;
+                        if (u >= 1f) {
+                            rollOffset = end;
+                            if (rollOffset >= activeStep) {
+                                normalizeOnce(activeStep);
+                                winnerDelta = 0;
+                            }
+                            isSnapping = false;
                             snapBase = 0f;
                             snapTarget = 0f;
                             snapResidualStart = 0f;
@@ -598,6 +607,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         normalizeOnce(activeStep);
                         winnerDelta = 0;
                     }
+                    isSnapping = false;
+                    snapBase = 0f;
+                    snapTarget = 0f;
+                    snapResidualStart = 0f;
                 }
 
                 for (int col = 0; col < columnCount; col++)

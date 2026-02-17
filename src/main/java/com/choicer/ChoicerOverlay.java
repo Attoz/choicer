@@ -92,6 +92,9 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final int CHOICE_LABEL_RESERVED_HEIGHT = 34;
     private static final int CHOICE_ICON_TOP_PADDING = 8;
     private static final int CHOICE_BUTTON_Y_OFFSET = 12;
+    private static final float RESPONSIVE_BASE_VIEWPORT_HEIGHT = 900f;
+    private static final float RESPONSIVE_MIN_SCALE = 0.62f;
+    private static final float RESPONSIVE_MAX_SCALE = 1.24f;
     private static final long PULSE_PERIOD_NS = 1_400_000_000L;
     private static final long SHIMMER_PERIOD_NS = 2_600_000_000L;
     private static final float PULSE_MIN_ALPHA = 0.07f;
@@ -472,25 +475,31 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int vpX = client.getViewportXOffset();
         final int vpY = client.getViewportYOffset();
         final int vpWidth = client.getViewportWidth();
+        final int vpHeight = client.getViewportHeight();
         final int centerX = vpX + (vpWidth / 2);
 
-        final float slotScale = CHOICE_SLOT_SCALE;
+        final float layoutScale = getResponsiveLayoutScale(vpHeight);
+        final float slotScale = CHOICE_SLOT_SCALE * layoutScale;
         final int baseSlotWidth = ICON_W + SLOT_PADDING_X * 2;
         final int baseSlotHeight = ICON_H + SLOT_PADDING_Y * 2;
         final int rollingVisibleItems = Math.max(2, clickableSelection ? VISIBLE_SELECTION_ITEM_COUNT : VISIBLE_ROLLING_ITEM_COUNT);
-        final float iconTargetSize = clickableSelection ? SCROLL_ICON_TARGET : SCROLL_ICON_TARGET_COMPACT;
+        final float iconTargetSize = (clickableSelection ? SCROLL_ICON_TARGET : SCROLL_ICON_TARGET_COMPACT) * layoutScale;
         final int rollingContentSpan = Math.round(
                 iconTargetSize * rollingVisibleItems
                         + SCROLL_ITEM_GAP * (rollingVisibleItems - 1)
         );
         final int minSlotWidth = clickableSelection ? MIN_CHOICE_SLOT_WIDTH : MIN_SCROLL_SLOT_WIDTH;
-        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), minSlotWidth);
-        final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), MIN_CHOICE_SLOT_HEIGHT);
+        final int scaledMinSlotWidth = scaleLayoutValue(minSlotWidth, layoutScale, baseSlotWidth);
+        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), scaledMinSlotWidth);
+        final int scaledMinSlotHeight = scaleLayoutValue(MIN_CHOICE_SLOT_HEIGHT, layoutScale, baseSlotHeight);
+        final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), scaledMinSlotHeight);
         final int slotHeight = Math.max(scaledSlotHeight, rollingContentSpan + SLOT_PADDING_Y * 2);
-        final int spacing = Math.max(14, Math.round(COLUMN_SPACING * slotScale));
+        final int spacing = Math.max(scaleLayoutValue(14, layoutScale, 10), Math.round(COLUMN_SPACING * slotScale));
         final int totalWidth = columnCount * slotWidth + (columnCount - 1) * spacing;
         final int slotsLeftX = centerX - ( totalWidth / 2 );
-        final int slotTopY = vpY + SELECTION_TOP_MARGIN + (clickableSelection ? CHOICE_BUTTON_Y_OFFSET : 0);
+        final int selectionTopMargin = scaleLayoutValue(SELECTION_TOP_MARGIN, layoutScale, 8);
+        final int choiceButtonYOffset = scaleLayoutValue(CHOICE_BUTTON_Y_OFFSET, layoutScale, 6);
+        final int slotTopY = vpY + selectionTopMargin + (clickableSelection ? choiceButtonYOffset : 0);
 
         final float middleIndex = (ICON_COUNT - 1) / 2f;
         final float scrollGap = SCROLL_ITEM_GAP;
@@ -569,6 +578,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     final boolean goNext = (snapResidualStart / activeStep) >= SNAP_NEXT_THRESHOLD;
                     winnerDelta = goNext ? 1 : 0;
                     snapTarget = goNext ? (snapBase + activeStep) : snapBase;
+                    if (snapTarget < rollOffset)
+                    {
+                        snapTarget += activeStep;
+                        winnerDelta = 1;
+                    }
                 }
 
                 if (!highlightPhase) {
@@ -579,9 +593,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         final float end = snapTarget;
                         rollOffset = start + (end - start) * s;
 
-                        if (rollOffset >= activeStep) {
-                            normalizeOnce(activeStep);
-                            winnerDelta = 0;
+                        if (u >= 1f) {
+                            rollOffset = end;
+                            if (rollOffset >= activeStep) {
+                                normalizeOnce(activeStep);
+                                winnerDelta = 0;
+                            }
+                            isSnapping = false;
                             snapBase = 0f;
                             snapTarget = 0f;
                             snapResidualStart = 0f;
@@ -598,6 +616,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         normalizeOnce(activeStep);
                         winnerDelta = 0;
                     }
+                    isSnapping = false;
+                    snapBase = 0f;
+                    snapTarget = 0f;
+                    snapResidualStart = 0f;
                 }
 
                 for (int col = 0; col < columnCount; col++)
@@ -664,7 +686,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         }
         else
         {
-            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX);
+            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX, layoutScale);
         }
 
         g.setClip(oldClip);
@@ -717,23 +739,29 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int vpWidth = client.getViewportWidth();
         final int vpHeight = client.getViewportHeight();
         final int centerX = vpX + (vpWidth / 2);
+        final float layoutScale = getResponsiveLayoutScale(vpHeight);
+        final float slotScale = CHOICE_SLOT_SCALE * layoutScale;
 
         final int localColumnCount = Math.max(2, Math.min(5, optionsSnapshot.size()));
         final int baseSlotWidth = ICON_W + SLOT_PADDING_X * 2;
         final int baseSlotHeight = ICON_H + SLOT_PADDING_Y * 2;
         final int rollingVisibleItems = Math.max(2, VISIBLE_SELECTION_ITEM_COUNT);
-        final float iconTargetSize = SCROLL_ICON_TARGET;
+        final float iconTargetSize = SCROLL_ICON_TARGET * layoutScale;
         final int rollingContentSpan = Math.round(
                 iconTargetSize * rollingVisibleItems
                         + SCROLL_ITEM_GAP * (rollingVisibleItems - 1)
         );
-        final int slotWidth = Math.max(baseSlotWidth, MIN_CHOICE_SLOT_WIDTH);
-        final int scaledSlotHeight = Math.max(baseSlotHeight, MIN_CHOICE_SLOT_HEIGHT);
+        final int scaledMinSlotWidth = scaleLayoutValue(MIN_CHOICE_SLOT_WIDTH, layoutScale, baseSlotWidth);
+        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), scaledMinSlotWidth);
+        final int scaledMinSlotHeight = scaleLayoutValue(MIN_CHOICE_SLOT_HEIGHT, layoutScale, baseSlotHeight);
+        final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), scaledMinSlotHeight);
         final int slotHeight = Math.max(scaledSlotHeight, rollingContentSpan + SLOT_PADDING_Y * 2);
-        final int spacing = Math.max(14, COLUMN_SPACING);
+        final int spacing = Math.max(scaleLayoutValue(14, layoutScale, 10), Math.round(COLUMN_SPACING * slotScale));
         final int totalWidth = localColumnCount * slotWidth + (localColumnCount - 1) * spacing;
         final int slotsLeftX = centerX - ( totalWidth / 2 );
-        final int slotTopY = vpY + SELECTION_TOP_MARGIN + CHOICE_BUTTON_Y_OFFSET;
+        final int selectionTopMargin = scaleLayoutValue(SELECTION_TOP_MARGIN, layoutScale, 8);
+        final int choiceButtonYOffset = scaleLayoutValue(CHOICE_BUTTON_Y_OFFSET, layoutScale, 6);
+        final int slotTopY = vpY + selectionTopMargin + choiceButtonYOffset;
 
         final float scrollGap = SCROLL_ITEM_GAP;
         final float maxIconWidth = slotWidth - SLOT_PADDING_X * 2f;
@@ -749,8 +777,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
         List<Rectangle> buttonRects = new ArrayList<>(localColumnCount);
         List<Rectangle> iconRects = new ArrayList<>(localColumnCount);
-        final int insetX = CHOICE_BUTTON_INSET;
-        final int insetY = CHOICE_BUTTON_INSET;
+        final int insetX = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int insetY = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int iconTopPadding = scaleLayoutValue(CHOICE_ICON_TOP_PADDING, layoutScale, 4);
+        final int labelReservedHeight = scaleLayoutValue(CHOICE_LABEL_RESERVED_HEIGHT, layoutScale, 20);
         final int slotBottom = slotTopY + slotHeight - insetY;
         final int baseIconSize = iconSize;
         for (int i = 0; i < localColumnCount; i++)
@@ -763,11 +793,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             int height = Math.max(1, buttonBottom - buttonTop);
             buttonRects.add(new Rectangle(x, y, width, height));
 
-            int iconAreaTop = buttonTop + CHOICE_ICON_TOP_PADDING;
-            int iconAreaBottom = buttonBottom - CHOICE_LABEL_RESERVED_HEIGHT;
+            int iconAreaTop = buttonTop + iconTopPadding;
+            int iconAreaBottom = buttonBottom - labelReservedHeight;
             if (iconAreaBottom <= iconAreaTop + 4)
             {
-                iconAreaBottom = buttonBottom - 6;
+                iconAreaBottom = buttonBottom - scaleLayoutValue(6, layoutScale, 4);
             }
             int iconAreaHeight = Math.max(1, iconAreaBottom - iconAreaTop);
             int choiceIconSize = Math.max(ICON_W, Math.min(baseIconSize, iconAreaHeight));
@@ -883,7 +913,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             int slotWidth,
             int slotHeight,
             int iconSize,
-            int iconPadX)
+            int iconPadX,
+            float layoutScale)
     {
         List<Integer> optionsSnapshot = currentOptions == null
                 ? Collections.emptyList()
@@ -902,8 +933,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         List<Rectangle> buttonRects = new ArrayList<>(drawCount);
         List<Rectangle> hitboxRects = new ArrayList<>(drawCount);
         List<Rectangle> iconRects = new ArrayList<>(drawCount);
-        final int insetX = CHOICE_BUTTON_INSET;
-        final int insetY = CHOICE_BUTTON_INSET;
+        final int insetX = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int insetY = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int iconTopPadding = scaleLayoutValue(CHOICE_ICON_TOP_PADDING, layoutScale, 4);
+        final int labelReservedHeight = scaleLayoutValue(CHOICE_LABEL_RESERVED_HEIGHT, layoutScale, 20);
         final int slotBottom = topY + slotHeight - insetY;
         final int baseIconSize = iconSize;
         for (int i = 0; i < drawCount; i++)
@@ -918,11 +951,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             Rectangle drawRect = new Rectangle(x, y, width, height);
             buttonRects.add(drawRect);
 
-            int iconAreaTop = buttonTop + CHOICE_ICON_TOP_PADDING;
-            int iconAreaBottom = buttonBottom - CHOICE_LABEL_RESERVED_HEIGHT;
+            int iconAreaTop = buttonTop + iconTopPadding;
+            int iconAreaBottom = buttonBottom - labelReservedHeight;
             if (iconAreaBottom <= iconAreaTop + 4)
             {
-                iconAreaBottom = buttonBottom - 6;
+                iconAreaBottom = buttonBottom - scaleLayoutValue(6, layoutScale, 4);
             }
             int iconAreaHeight = Math.max(1, iconAreaBottom - iconAreaTop);
             int choiceIconSize = Math.max(ICON_W, Math.min(baseIconSize, iconAreaHeight));
@@ -1508,6 +1541,29 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             adjusted += step;
         }
         return adjusted;
+    }
+
+    private float getResponsiveLayoutScale(int viewportHeight)
+    {
+        if (viewportHeight <= 0)
+        {
+            return 1f;
+        }
+        float scale = viewportHeight / RESPONSIVE_BASE_VIEWPORT_HEIGHT;
+        if (scale < RESPONSIVE_MIN_SCALE)
+        {
+            return RESPONSIVE_MIN_SCALE;
+        }
+        if (scale > RESPONSIVE_MAX_SCALE)
+        {
+            return RESPONSIVE_MAX_SCALE;
+        }
+        return scale;
+    }
+
+    private int scaleLayoutValue(int value, float scale, int min)
+    {
+        return Math.max(min, Math.round(value * scale));
     }
 
     private void drawSlotWindow(Graphics2D g, int x, int y, int width, int height, float scale)

@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Manages the roll animation for rolling/unlocking items.
- * Obtained items trigger rolls; selected choice items become unlocked.
+ * Obtained items trigger rolls; selected choice items become rolled (unlocked).
  */
 @Singleton
 @Slf4j
@@ -42,7 +42,7 @@ public class RollAnimationManager {
     @Inject
     private ClientThread clientThread;
     @Inject
-    private UnlockedItemsManager unlockedManager;
+    private RolledItemsManager rolledItemsManager;
     @Inject
     private ChoicerOverlay choicerOverlay;
     @Inject
@@ -179,7 +179,7 @@ public class RollAnimationManager {
             }
 
             if (itemToUnlock != 0) {
-                unlockedManager.unlockItem(itemToUnlock);
+                rolledItemsManager.markRolled(itemToUnlock);
             }
 
             final boolean wasManualRoll = isManualRoll();
@@ -240,7 +240,7 @@ public class RollAnimationManager {
         }
         List<Integer> locked = new ArrayList<>();
         for (int id : allTradeableItems) {
-            if (!unlockedManager.isUnlocked(id)) {
+            if (!rolledItemsManager.isRolled(id)) {
                 locked.add(id);
             }
         }
@@ -286,7 +286,7 @@ public class RollAnimationManager {
         int target = Math.max(2, Math.min(5, config.choicerOptionCount()));
         LinkedHashSet<Integer> options = new LinkedHashSet<>();
         boolean hasTradeableOption = isTradeableItem(obtainedItemId);
-        if (obtainedItemId != 0 && !unlockedManager.isUnlocked(obtainedItemId)) {
+        if (obtainedItemId != 0 && !rolledItemsManager.isRolled(obtainedItemId)) {
             options.add(obtainedItemId);
         }
 

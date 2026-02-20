@@ -26,10 +26,13 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Panel for displaying rolled/obtained items with list-based filtering.
+ * Panel for displaying rolled and unlocked items.
+ * It provides UI for manual roll actions, search/filter functionality,
+ * and displays each item with its icon and full item name.
+ * Each item panel shows a tooltip on both the icon and the panel with the item
+ * name.
  */
-public class ChoicerPanel extends PluginPanel
-{
+public class ChoicerPanel extends PluginPanel {
     private static final Color BG = new Color(34, 30, 23);
     private static final Color PANEL_BG = new Color(44, 38, 28);
     private static final Color PANEL_BG_ALT = new Color(50, 43, 32);

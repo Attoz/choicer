@@ -8,7 +8,8 @@ import java.util.Set;
 
 public enum ItemSets {
 
-    // Items are sorted in the same order as displayed on the Grand Exchange interface
+    // Items are sorted in the same order as displayed on the Grand Exchange
+    // interface
     DwarfCannon(ItemID.SET_CANNON),
 
     // Dragonhide sets

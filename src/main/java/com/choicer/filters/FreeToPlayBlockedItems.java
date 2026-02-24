@@ -339,7 +339,7 @@ public enum FreeToPlayBlockedItems {
     AncientLegs(ItemID.SET_RUNE_LEGS_ANCIENT),
     AncientSkirt(ItemID.SET_RUNE_SKIRT_ANCIENT),
     GildedDragonhide(ItemID.SET_DHIDE_GILDED),
-;
+    ;
 
     @Getter
     private final int id;
@@ -364,7 +364,8 @@ public enum FreeToPlayBlockedItems {
     }
 
     /**
-     * Checks if the given item ID is one of the items that cannot be self-sufficiently
+     * Checks if the given item ID is one of the items that cannot be
+     * self-sufficiently
      * obtained on a free to play server.
      *
      * @param id the item id to check.

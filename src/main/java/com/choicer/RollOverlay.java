@@ -5,8 +5,7 @@ import java.util.function.Supplier;
 /**
  * Common contract for roll overlays so the animation manager can swap them.
  */
-public interface RollOverlay
-{
+public interface RollOverlay {
     void startRollAnimation(int dummy, int rollDurationMs, Supplier<Integer> randomLockedItemSupplier);
 
     int getFinalItem();
@@ -16,7 +15,6 @@ public interface RollOverlay
     /**
      * Optional hook for overlays to stop rendering immediately (no-op by default).
      */
-    default void stopAnimation()
-    {
+    default void stopAnimation() {
     }
 }

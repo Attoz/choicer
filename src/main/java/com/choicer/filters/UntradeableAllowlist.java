@@ -10,13 +10,11 @@ import java.util.Set;
  * Tracks the set of untradeable item IDs that can participate in Chocier rolls
  * when the Include Untradeable config toggle is enabled.
  */
-public final class UntradeableAllowlist
-{
+public final class UntradeableAllowlist {
     @Getter
     private static final Set<Integer> ALLOWED_UNTRADEABLE_ITEMS;
 
-    static
-    {
+    static {
         Set<Integer> items = new HashSet<>();
 
         items.add(7453);
@@ -321,12 +319,10 @@ public final class UntradeableAllowlist
         items.add(13135);
         items.add(13136);
 
-
         ALLOWED_UNTRADEABLE_ITEMS = Collections.unmodifiableSet(items);
     }
 
-    private UntradeableAllowlist()
-    {
+    private UntradeableAllowlist() {
         // Utility class
     }
 }

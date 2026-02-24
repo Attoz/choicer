@@ -31,11 +31,10 @@ import java.util.function.Consumer;
 @Singleton
 public class ActionHandler {
 
-
 	private static final Set<MenuAction> disabledActions = EnumSet.of(
-			MenuAction.CC_OP,               // inventory “Use” on locked
-			MenuAction.WIDGET_TARGET,       // “Use” on widgets
-			MenuAction.WIDGET_TARGET_ON_WIDGET  // “Use” on widget -> widget
+			MenuAction.CC_OP, // inventory “Use” on locked
+			MenuAction.WIDGET_TARGET, // “Use” on widgets
+			MenuAction.WIDGET_TARGET_ON_WIDGET // “Use” on widget -> widget
 	);
 
 	private static final Set<MenuAction> GROUND_ACTIONS = EnumSet.of(
@@ -43,8 +42,7 @@ public class ActionHandler {
 			MenuAction.GROUND_ITEM_SECOND_OPTION,
 			MenuAction.GROUND_ITEM_THIRD_OPTION,
 			MenuAction.GROUND_ITEM_FOURTH_OPTION,
-			MenuAction.GROUND_ITEM_FIFTH_OPTION
-	);
+			MenuAction.GROUND_ITEM_FIFTH_OPTION);
 
 	private static final int ORBS_GROUP = (InterfaceID.Orbs.UNIVERSE >>> 16);
 
@@ -64,16 +62,19 @@ public class ActionHandler {
 		return plugin.getItemManager().canonicalize(mapped);
 	}
 
-	private final HashSet<Integer> enabledUIs = new HashSet<>() {{
-		for (EnabledUI ui : EnabledUI.values()) add(ui.getId());
-	}};
+	private final HashSet<Integer> enabledUIs = new HashSet<>() {
+		{
+			for (EnabledUI ui : EnabledUI.values())
+				add(ui.getId());
+		}
+	};
 
 	@Inject
 	private Client client;
 	@Inject
 	private EventBus eventBus;
-    @Inject
-    private ChoicerConfig config;
+	@Inject
+	private ChoicerConfig config;
 	@Inject
 	private ChoicerPlugin plugin;
 	@Inject
@@ -85,7 +86,8 @@ public class ActionHandler {
 	private int enabledUIOpen = -1;
 
 	// A no-op click handler that marks a menu entry as disabled.
-	private final Consumer<MenuEntry> DISABLED = e -> { };
+	private final Consumer<MenuEntry> DISABLED = e -> {
+	};
 
 	public void startUp() {
 		eventBus.register(this);
@@ -101,19 +103,20 @@ public class ActionHandler {
 		return enabledUIOpen != -1;
 	}
 
-	private EnabledUI currentEnabledUi()
-	{
+	private EnabledUI currentEnabledUi() {
 		return enabledUIOpen == -1 ? null : EnabledUI.fromGroupId(enabledUIOpen);
 	}
 
 	private boolean inactive() {
-		if (!unlockedItemsManager.ready()) return true;
+		if (!unlockedItemsManager.ready())
+			return true;
 		return client.getGameState().getState() < GameState.LOADING.getState();
 	}
 
 	@Subscribe
 	public void onWidgetClosed(WidgetClosed event) {
-		if (event.getGroupId() == enabledUIOpen) enabledUIOpen = -1;
+		if (event.getGroupId() == enabledUIOpen)
+			enabledUIOpen = -1;
 	}
 
 	@Subscribe
@@ -124,11 +127,11 @@ public class ActionHandler {
 
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
-		if (inactive()) return;
+		if (inactive())
+			return;
 
 		EnabledUI ui = currentEnabledUi();
-		if (ui != null && !ui.isGreyLockedItems())
-		{
+		if (ui != null && !ui.isGreyLockedItems()) {
 			return;
 		}
 
@@ -149,9 +152,9 @@ public class ActionHandler {
 			entry.setOption("<col=808080>" + option);
 			entry.setTarget("<col=808080>" + target);
 			entry.onClick(DISABLED);
-            if (config.deprioritizeLockedOptions()) {
-                entry.setDeprioritized(true);
-            }
+			if (config.deprioritizeLockedOptions()) {
+				entry.setDeprioritized(true);
+			}
 		}
 	}
 
@@ -169,8 +172,7 @@ public class ActionHandler {
 	/**
 	 * Returns true if the entry appears to be for a ground item.
 	 */
-	private boolean isGroundItem(MenuEntry entry)
-	{
+	private boolean isGroundItem(MenuEntry entry) {
 		return GROUND_ACTIONS.contains(entry.getType());
 	}
 
@@ -178,14 +180,12 @@ public class ActionHandler {
 	 * @param itemId canonicalized item ID of a ground item
 	 * @return true if it’s tracked by the plugin and still locked
 	 */
-	private boolean isLockedGroundItem(int itemId)
-	{
+	private boolean isLockedGroundItem(int itemId) {
 		return plugin.isInPlay(itemId)
 				&& !unlockedItemsManager.isUnlocked(itemId);
 	}
 
-	private boolean isHealthOrbCure(MenuEntry entry)
-	{
+	private boolean isHealthOrbCure(MenuEntry entry) {
 		if (entry.getType() != MenuAction.CC_OP)
 			return false;
 
@@ -199,12 +199,12 @@ public class ActionHandler {
 	}
 
 	/**
-	 * This method handles non-ground items (or any other cases) by checking if the item is enabled.
+	 * This method handles non-ground items (or any other cases) by checking if the
+	 * item is enabled.
 	 * It returns true if the action should be allowed.
 	 */
 	private boolean isEnabled(int id, MenuEntry entry, MenuAction action) {
-		if (isHealthOrbCure(entry))
-		{
+		if (isHealthOrbCure(entry)) {
 			return true;
 		}
 
@@ -212,17 +212,17 @@ public class ActionHandler {
 		String target = Text.removeTags(entry.getTarget());
 
 		EnabledUI ui = currentEnabledUi();
-		if (ui != null && ui.isAllowAllActions())
-		{
+		if (ui != null && ui.isAllowAllActions()) {
 			return true;
 		}
 
 		// Always allow "Drop"
 		if (option.equalsIgnoreCase("drop") || option.equalsIgnoreCase("check"))
 			return true;
-		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub"))
-		{
-			if (!plugin.isInPlay(id)) { return true; }
+		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub")) {
+			if (!plugin.isInPlay(id)) {
+				return true;
+			}
 			return unlockedItemsManager.isUnlocked(id);
 		}
 		if (SkillOp.isSkillOp(option))
@@ -245,7 +245,7 @@ public class ActionHandler {
 	 * If a ground item is locked, this method consumes the event.
 	 */
 	public static void handleGroundItems(ItemManager itemManager, UnlockedItemsManager unlockedItemsManager,
-										 MenuOptionClicked event, ChoicerPlugin plugin) {
+			MenuOptionClicked event, ChoicerPlugin plugin) {
 		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
 			int rawItemId = event.getId() != -1
 					? event.getId()

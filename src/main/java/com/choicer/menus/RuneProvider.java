@@ -7,8 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 @Getter
-public enum RuneProvider
-{
+public enum RuneProvider {
 	// Banana (yeah)
 	BANANA(ItemID.BANANA),
 
@@ -48,7 +47,7 @@ public enum RuneProvider
 	TOME_OF_EARTH(true, ItemID.TOME_OF_EARTH, EARTH_RUNE),
 
 	// Combo runes
-	AETHER_RUNE(false,ItemID.AETHERRUNE,COSMIC_RUNE, SOUL_RUNE),
+	AETHER_RUNE(false, ItemID.AETHERRUNE, COSMIC_RUNE, SOUL_RUNE),
 	MIST_RUNE(false, ItemID.MISTRUNE, AIR_RUNE, WATER_RUNE),
 	DUST_RUNE(false, ItemID.DUSTRUNE, AIR_RUNE, EARTH_RUNE),
 	MUD_RUNE(false, ItemID.MUDRUNE, WATER_RUNE, EARTH_RUNE),
@@ -82,31 +81,27 @@ public enum RuneProvider
 	private final int id;
 	private final HashSet<Integer> provides = new HashSet<>();
 
-	RuneProvider(int id)
-	{
+	RuneProvider(int id) {
 		this.requiresEquipped = false;
 		this.id = id;
 		this.provides.add(id);
 	}
 
-	RuneProvider(boolean requiresEquipped, int id, RuneProvider... provides)
-	{
+	RuneProvider(boolean requiresEquipped, int id, RuneProvider... provides) {
 		this.requiresEquipped = requiresEquipped;
 		this.id = id;
-		for (RuneProvider runeProvider : provides) this.provides.addAll(runeProvider.getProvides());
+		for (RuneProvider runeProvider : provides)
+			this.provides.addAll(runeProvider.getProvides());
 	}
 
 	private static final HashSet<Integer> EQUIPPED_PROVIDERS = new HashSet<>();
 	private static final HashSet<Integer> INV_PROVIDERS = new HashSet<>();
 	private static final HashMap<Integer, HashSet<Integer>> PROVIDER_TO_PROVIDED = new HashMap<>();
 
-	static
-	{
-		for (RuneProvider runeProvider : RuneProvider.values())
-		{
+	static {
+		for (RuneProvider runeProvider : RuneProvider.values()) {
 			PROVIDER_TO_PROVIDED.put(runeProvider.getId(), runeProvider.getProvides());
-			if (runeProvider.isRequiresEquipped())
-			{
+			if (runeProvider.isRequiresEquipped()) {
 				EQUIPPED_PROVIDERS.add(runeProvider.getId());
 			} else {
 				INV_PROVIDERS.add(runeProvider.getId());
@@ -114,7 +109,15 @@ public enum RuneProvider
 		}
 	}
 
-	public static boolean isEquippedProvider(int id) { return EQUIPPED_PROVIDERS.contains(id); }
-	public static boolean isInvProvider(int id) { return INV_PROVIDERS.contains(id); }
-	public static HashSet<Integer> getProvidedRunes(int id) { return PROVIDER_TO_PROVIDED.get(id); }
+	public static boolean isEquippedProvider(int id) {
+		return EQUIPPED_PROVIDERS.contains(id);
+	}
+
+	public static boolean isInvProvider(int id) {
+		return INV_PROVIDERS.contains(id);
+	}
+
+	public static HashSet<Integer> getProvidedRunes(int id) {
+		return PROVIDER_TO_PROVIDED.get(id);
+	}
 }

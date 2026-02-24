@@ -34,12 +34,14 @@ public class ItemsFilter {
 
     /**
      * Checks if a poisonable weapon variant is eligible for rolling.
-     * Base weapons are always eligible; for poisoned variants, if requireWeaponPoison is true,
+     * Base weapons are always eligible; for poisoned variants, if
+     * requireWeaponPoison is true,
      * the corresponding global weapon poison must also be unlocked.
      *
-     * @param itemId the item id to check
-     * @param requireWeaponPoison if true, the matching global poison must be unlocked
-     * @param unlockedItems the set of unlocked item ids
+     * @param itemId              the item id to check
+     * @param requireWeaponPoison if true, the matching global poison must be
+     *                            unlocked
+     * @param unlockedItems       the set of unlocked item ids
      * @return true if eligible; false otherwise
      */
     public static boolean isPoisonEligible(int itemId, boolean requireWeaponPoison, Set<Integer> unlockedItems) {
@@ -53,7 +55,8 @@ public class ItemsFilter {
     }
 
     /**
-     * Returns true if this item ID is on the allowlist of untradeables that can participate
+     * Returns true if this item ID is on the allowlist of untradeables that can
+     * participate
      * in rolling/unlocking when the Include Untradeable toggle is enabled.
      *
      * @param itemId canonical item id to check
@@ -64,7 +67,8 @@ public class ItemsFilter {
     }
 
     /**
-     * Returns true if this item ID is in the quest item allowlist. Quest items are only considered
+     * Returns true if this item ID is in the quest item allowlist. Quest items are
+     * only considered
      * when the Include Quest Items toggle is enabled.
      *
      * @param itemId canonical item id to check

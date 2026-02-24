@@ -6,8 +6,7 @@ import java.util.HashSet;
 import java.util.HashMap;
 
 @Getter
-public enum SkillItem
-{
+public enum SkillItem {
 
 	BRONZE_AXE(1351, SkillOp.CHOP_DOWN),
 	IRON_AXE(1349, SkillOp.CHOP_DOWN),
@@ -37,7 +36,7 @@ public enum SkillItem
 	MITHRIL_PICKAXE(1273, SkillOp.MINE),
 	ADAMANT_PICKAXE(1271, SkillOp.MINE),
 	RUNE_PICKAXE(1275, SkillOp.MINE),
-	DRAGON_PICKAXE(11920,SkillOp.MINE),
+	DRAGON_PICKAXE(11920, SkillOp.MINE),
 	GILDED_PICKAXE(23276, SkillOp.MINE),
 	THIRD_AGE_PICKAXE(20014, SkillOp.MINE),
 
@@ -64,7 +63,7 @@ public enum SkillItem
 	MITHRIL_ORE(447, SkillOp.SMELT),
 	RUNITE_ORE(451, SkillOp.SMELT),
 	SILVER_ORE(442, SkillOp.SMELT),
-	SILVER_BAR(2355,SkillOp.SMELT),
+	SILVER_BAR(2355, SkillOp.SMELT),
 	GOLD_ORE(444, SkillOp.SMELT),
 	GOLD_BAR(2357, SkillOp.SMELT),
 
@@ -94,7 +93,7 @@ public enum SkillItem
 	PURE_ESSENCE(7936, SkillOp.CRAFT_RUNE),
 	GUARDIAN_ESSENCE(26879, SkillOp.CRAFT_RUNE),
 
-	//Blackjacks
+	// Blackjacks
 	OAK_BLACKJACK_O(6408, SkillOp.LURE),
 	OAK_BLACKJACK_D(6410, SkillOp.LURE),
 	WILLOW_BLACKJACK(4600, SkillOp.LURE),
@@ -113,42 +112,35 @@ public enum SkillItem
 	private final SkillOp option;
 	private final boolean requiresUnlock;
 
-	SkillItem(int id, SkillOp option)
-	{
+	SkillItem(int id, SkillOp option) {
 		this(id, option, true);
 	}
 
-	SkillItem(int id, SkillOp option, boolean requiresUnlock)
-	{
+	SkillItem(int id, SkillOp option, boolean requiresUnlock) {
 		this.id = id;
 		this.option = option;
 		this.requiresUnlock = requiresUnlock;
 	}
 
-	public SkillOp getSkillOp()
-	{
+	public SkillOp getSkillOp() {
 		return option;
 	}
 
 	private static final HashSet<Integer> ALL_SKILL_ITEMS = new HashSet<>();
 	private static final HashMap<Integer, SkillItem> ID_TO_ITEM = new HashMap<>();
 
-	static
-	{
-		for (SkillItem skillItem : SkillItem.values())
-		{
+	static {
+		for (SkillItem skillItem : SkillItem.values()) {
 			ALL_SKILL_ITEMS.add(skillItem.getId());
 			ID_TO_ITEM.put(skillItem.getId(), skillItem);
 		}
 	}
 
-	public static boolean isSkillItem(int id)
-	{
+	public static boolean isSkillItem(int id) {
 		return ALL_SKILL_ITEMS.contains(id);
 	}
 
-	public static SkillItem fromId(int id)
-	{
+	public static SkillItem fromId(int id) {
 		return ID_TO_ITEM.get(id);
 	}
 }

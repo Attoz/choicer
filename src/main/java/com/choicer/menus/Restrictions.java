@@ -18,37 +18,33 @@ import javax.inject.Singleton;
 import java.util.*;
 
 @Singleton
-public class Restrictions
-{
+public class Restrictions {
 	private static final int[] RUNE_POUCH_TYPE_VARBITS = {
-			29,    // RUNE_POUCH_RUNE1
-			1622,  // RUNE_POUCH_RUNE2
-			1623,  // RUNE_POUCH_RUNE3
+			29, // RUNE_POUCH_RUNE1
+			1622, // RUNE_POUCH_RUNE2
+			1623, // RUNE_POUCH_RUNE3
 			14285, // RUNE_POUCH_RUNE4
 			15373, // RUNE_POUCH_RUNE5
-			15374  // RUNE_POUCH_RUNE6
+			15374 // RUNE_POUCH_RUNE6
 	};
 
 	private static final int[] RUNE_POUCH_AMOUNT_VARBITS = {
-			1624,  // RUNE_POUCH_AMOUNT1
-			1625,  // RUNE_POUCH_AMOUNT2
-			1626,  // RUNE_POUCH_AMOUNT3
+			1624, // RUNE_POUCH_AMOUNT1
+			1625, // RUNE_POUCH_AMOUNT2
+			1626, // RUNE_POUCH_AMOUNT3
 			14286, // RUNE_POUCH_AMOUNT4
 			15375, // RUNE_POUCH_AMOUNT5
-			15376  // RUNE_POUCH_AMOUNT6
+			15376 // RUNE_POUCH_AMOUNT6
 	};
 
-	private static final WorldArea FOUNTAIN_OF_RUNE_AREA =
-			new WorldArea(3367, 3890, 13, 9, 0);
+	private static final WorldArea FOUNTAIN_OF_RUNE_AREA = new WorldArea(3367, 3890, 13, 9, 0);
 
-	private boolean isInFountainArea()
-	{
+	private boolean isInFountainArea() {
 		WorldPoint lp = client.getLocalPlayer().getWorldLocation();
 		return FOUNTAIN_OF_RUNE_AREA.contains(lp);
 	}
 
-	private boolean isInLMS()
-	{
+	private boolean isInLMS() {
 		EnumSet<WorldType> worldTypes = client.getWorldType();
 		return (worldTypes.contains(WorldType.LAST_MAN_STANDING));
 
@@ -57,111 +53,104 @@ public class Restrictions
 	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.MagicSpellbook.TOOLTIP;
 	public static final int AUTOCAST_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.Autocast.INFO;
 
-	@Inject private ChoicerPlugin plugin;
-	@Inject private Client client;
-	@Inject private UnlockedItemsManager unlockedItemsManager;
+	@Inject
+	private ChoicerPlugin plugin;
+	@Inject
+	private Client client;
+	@Inject
+	private UnlockedItemsManager unlockedItemsManager;
 	private final Set<SkillOp> enabledSkillOps = EnumSet.noneOf(SkillOp.class);
 	private final HashSet<Integer> availableRunes = new HashSet<>();
 
 	@Subscribe
-	public void onGameTick(GameTick event)
-	{
-		if (!unlockedItemsManager.ready()) return;
+	public void onGameTick(GameTick event) {
+		if (!unlockedItemsManager.ready())
+			return;
 		enabledSkillOps.clear();
 		availableRunes.clear();
 
 		ItemContainer equippedItems = client.getItemContainer(InventoryID.WORN);
 		ItemContainer inventoryItems = client.getItemContainer(InventoryID.INV);
 
-		if (equippedItems != null)
-		{
+		if (equippedItems != null) {
 			Arrays.stream(equippedItems.getItems()).forEach(item -> {
 				int id = item.getId();
 				SkillItem skillItem = SkillItem.fromId(id);
-				if (skillItem != null && !skillItem.isRequiresUnlock())
-				{
+				if (skillItem != null && !skillItem.isRequiresUnlock()) {
 					enabledSkillOps.add(skillItem.getSkillOp());
 					return;
 				}
 
-				if (shouldSkipItem(id)) return;
+				if (shouldSkipItem(id))
+					return;
 				if (RuneProvider.isEquippedProvider(id))
 					availableRunes.addAll(RuneProvider.getProvidedRunes(id));
-				if (skillItem != null) enabledSkillOps.add(skillItem.getSkillOp());
+				if (skillItem != null)
+					enabledSkillOps.add(skillItem.getSkillOp());
 			});
 		}
 
-		if (inventoryItems != null)
-		{
+		if (inventoryItems != null) {
 			Arrays.stream(inventoryItems.getItems()).forEach(item -> {
 				int id = item.getId();
 				SkillItem skillItem = SkillItem.fromId(id);
-				if (skillItem != null && !skillItem.isRequiresUnlock())
-				{
+				if (skillItem != null && !skillItem.isRequiresUnlock()) {
 					enabledSkillOps.add(skillItem.getSkillOp());
 					return;
 				}
 
-				if (shouldSkipItem(id)) return;
+				if (shouldSkipItem(id))
+					return;
 				if (RuneProvider.isInvProvider(id))
 					availableRunes.addAll(RuneProvider.getProvidedRunes(id));
-				if (skillItem != null) enabledSkillOps.add(skillItem.getSkillOp());
+				if (skillItem != null)
+					enabledSkillOps.add(skillItem.getSkillOp());
 			});
 		}
 
 		EnumComposition pouchEnum = client.getEnum(EnumID.RUNEPOUCH_RUNE);
-		for (int i = 0; i < 6; i++)
-		{
-			int qty     = client.getVarbitValue(RUNE_POUCH_AMOUNT_VARBITS[i]);
+		for (int i = 0; i < 6; i++) {
+			int qty = client.getVarbitValue(RUNE_POUCH_AMOUNT_VARBITS[i]);
 			int typeIdx = client.getVarbitValue(RUNE_POUCH_TYPE_VARBITS[i]);
-			if (qty <= 0)
-			{
+			if (qty <= 0) {
 				continue;
 			}
 
 			int runeId = pouchEnum.getIntValue(typeIdx);
-			if (shouldSkipItem(runeId))
-			{
+			if (shouldSkipItem(runeId)) {
 				continue;
 			}
 
-			if (RuneProvider.isInvProvider(runeId))
-			{
+			if (RuneProvider.isInvProvider(runeId)) {
 				availableRunes.addAll(RuneProvider.getProvidedRunes(runeId));
 			}
 		}
 	}
 
-	public boolean isSkillOpEnabled(String option)
-	{
+	public boolean isSkillOpEnabled(String option) {
 		SkillOp op = SkillOp.fromString(option);
 		return enabledSkillOps.contains(op);
 	}
 
-	private boolean shouldSkipItem(int id)
-	{
-		if (!plugin.isInPlay(id))
-		{
+	private boolean shouldSkipItem(int id) {
+		if (!plugin.isInPlay(id)) {
 			return !(RuneProvider.isEquippedProvider(id)
 					|| RuneProvider.isInvProvider(id));
 		}
 		return !unlockedItemsManager.isUnlocked(id);
 	}
 
-	public boolean isSpellOpEnabled(String spellName)
-	{
-		if (isInFountainArea() || isInLMS()) { return true; }
+	public boolean isSpellOpEnabled(String spellName) {
+		if (isInFountainArea() || isInLMS()) {
+			return true;
+		}
 		BlightedSack sack = BlightedSack.fromSpell(spellName);
-		if (sack != null)
-		{
+		if (sack != null) {
 			int sackId = sack.getSackItemId();
 			ItemContainer inv = client.getItemContainer(InventoryID.INV);
-			if (inv != null	&& (sackId == ItemID.BLIGHTED_SACK_SURGE || unlockedItemsManager.isUnlocked(sackId)))
-			{
-				for (Item item : inv.getItems())
-				{
-					if (item.getId() == sackId)
-					{
+			if (inv != null && (sackId == ItemID.BLIGHTED_SACK_SURGE || unlockedItemsManager.isUnlocked(sackId))) {
+				for (Item item : inv.getItems()) {
+					if (item.getId() == sackId) {
 						return true;
 					}
 				}
@@ -169,22 +158,24 @@ public class Restrictions
 		}
 
 		Widget autocastOverlay = client.getWidget(AUTOCAST_REQUIREMENT_OVERLAY_NORMAL);
-		if (autocastOverlay != null) return processChildren(autocastOverlay);
+		if (autocastOverlay != null)
+			return processChildren(autocastOverlay);
 
 		Widget spellOverlay = client.getWidget(SPELL_REQUIREMENT_OVERLAY_NORMAL);
-		if (spellOverlay != null) return processChildren(spellOverlay);
+		if (spellOverlay != null)
+			return processChildren(spellOverlay);
 		return false;
 	}
 
-	public boolean processChildren(Widget widget)
-	{
+	public boolean processChildren(Widget widget) {
 		Widget[] children = widget.getDynamicChildren();
-		if (children == null) return true;
+		if (children == null)
+			return true;
 
-		for (Widget child : children)
-		{
+		for (Widget child : children) {
 			int id = child.getItemId();
-			if (id == -1) continue;
+			if (id == -1)
+				continue;
 
 			if (plugin.isInPlay(id) && !availableRunes.contains(id))
 				return false;

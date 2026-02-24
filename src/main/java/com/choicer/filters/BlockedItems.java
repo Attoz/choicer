@@ -7,13 +7,13 @@ import java.util.HashSet;
 import java.util.Set;
 import net.runelite.api.gameval.ItemID;
 
-
 public final class BlockedItems {
-    @Getter private static final Set<Integer> BLOCKED_ITEMS;
+    @Getter
+    private static final Set<Integer> BLOCKED_ITEMS;
 
     static {
         Set<Integer> blocked = new HashSet<>();
-        //Dead Man Mode
+        // Dead Man Mode
         blocked.add(ItemID.DEADMAN_BLIGHTED_AGS); // Corrupted Armadyl Godsword
         blocked.add(ItemID.DEADMAN_BLIGHTED_DARK_BOW); // Corrupted Dark Bow
         blocked.add(ItemID.DEADMAN_BLIGHTED_DRAGON_CLAWS); // Corrupted Dragon Claws
@@ -270,7 +270,7 @@ public final class BlockedItems {
         blocked.add(ItemID.SET_LEAGUE_5_RELICHUNTER_T2); // Raging Echoes Relic Hunter (t2) Armour Set
         blocked.add(ItemID.SET_LEAGUE_5_RELICHUNTER_T3); // Raging Echoes Relic Hunter (t3) Armour Set
 
-        //Gridmaster Rewards
+        // Gridmaster Rewards
         blocked.add(ItemID.BINGO_TABARD); // Grid master tabard
         blocked.add(ItemID.BINGO_TABARD_BLACK); // Grid master tabard (b)
         blocked.add(ItemID.BINGO_TABARD_PINK); // Grid master tabard (p)

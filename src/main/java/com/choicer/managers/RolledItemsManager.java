@@ -22,8 +22,7 @@ import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
 @Slf4j
 @Singleton
-public class RolledItemsManager
-{
+public class RolledItemsManager {
     private static final int MAX_BACKUPS = 10;
     private static final String CFG_KEY = "rolled";
     private static final String LEGACY_CFG_KEY = "unlocked";
@@ -56,7 +55,9 @@ public class RolledItemsManager
     private Thread watcherThread;
     public boolean ready() { return accountManager.getPlayerName() != null; }
 
-    public boolean isRolled(int itemId) { return rolledItems.contains(itemId); }
+    public boolean isRolled(int itemId) {
+        return rolledItems.contains(itemId);
+    }
 
     /** Return an immutable snapshot to avoid leaking the synchronizedSet. */
     public Set<Integer> getRolledItems()
@@ -67,10 +68,8 @@ public class RolledItemsManager
         }
     }
 
-    public void markRolled(int itemId)
-    {
-        if (rolledItems.add(itemId))
-        {
+    public void markRolled(int itemId) {
+        if (rolledItems.add(itemId)) {
             dirty = true;
             safeNotifyChange();
             saveRolledItems();
@@ -78,15 +77,13 @@ public class RolledItemsManager
     }
 
     /** Initial load + LWW reconciliation. */
-    public void loadRolledItems()
-    {
+    public void loadRolledItems() {
         reconcileWithCloud(false);
         safeNotifyChange();
     }
 
     /** Normal save: disk + debounced cloud with current time. */
-    public void saveRolledItems()
-    {
+    public void saveRolledItems() {
         saveInternal(System.currentTimeMillis(), true);
     }
 
@@ -97,18 +94,14 @@ public class RolledItemsManager
         Path file = safeGetFilePathOrNull(FILE_NAME);
         if (file == null) return;
 
-        try
-        {
+        try {
             watchService = FileSystems.getDefault().newWatchService();
             file.getParent().register(
                     watchService,
                     StandardWatchEventKinds.ENTRY_CREATE,
                     StandardWatchEventKinds.ENTRY_MODIFY,
-                    StandardWatchEventKinds.ENTRY_DELETE
-            );
-        }
-        catch (IOException e)
-        {
+                    StandardWatchEventKinds.ENTRY_DELETE);
+        } catch (IOException e) {
             closeWatchServiceQuietly();
             log.error("Rolled watcher: could not register", e);
             return;
@@ -123,10 +116,10 @@ public class RolledItemsManager
     }
 
     /** Stop watching the JSON. */
-    public void stopWatching()
-    {
+    public void stopWatching() {
         watcherRunning = false;
-        if (watcherThread != null) watcherThread.interrupt();
+        if (watcherThread != null)
+            watcherThread.interrupt();
         closeWatchServiceQuietly();
         watcherThread = null;
     }
@@ -138,26 +131,20 @@ public class RolledItemsManager
         Path file = safeGetFilePathOrNull(FILE_NAME);
         if (file == null) return;
 
-        try
-        {
+        try {
             rotateBackupIfExists(file);
             Set<Integer> snap = snapshotRolled();
             writeJsonAtomic(file, snap);
             mirrorToCloud(System.currentTimeMillis(), false, snap);
             dirty = false;
-        }
-        catch (IOException e)
-        {
+        } catch (IOException e) {
             log.error("Shutdown flush failed for rolled items (local saves may be stale).", e);
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             log.error("Shutdown flush: failed to mirror rolled set to ConfigManager.", e);
         }
     }
 
-    private void reconcileWithCloud(boolean runtime)
-    {
+    private void reconcileWithCloud(boolean runtime) {
         String player = accountManager.getPlayerName();
         if (player == null) return;
         migrateLegacyObtainedFileIfNeeded();
@@ -308,11 +295,61 @@ public class RolledItemsManager
         }
     }
 
-    /** Disk write + cloud mirror (debounced or immediate). */
-    private void saveInternal(long stampMillis, boolean debounced)
+    private void migrateLegacyObtainedFileIfNeeded()
     {
-        if (!isExecutorAvailable())
+        Path legacyUnlocked = safeGetFilePathOrNull(LEGACY_FILE_NAME);
+        if (legacyUnlocked == null) return;
+
+        // Legacy marker: if this doesn't exist, it's a new-ish player and we should do nothing.
+        if (!Files.exists(legacyUnlocked)) return;
+
+        Path obtainedFile = safeGetFilePathOrNull(LEGACY_OBTAINED_DEST);
+        Path legacyObtainedFile = safeGetFilePathOrNull(LEGACY_OBTAINED_FILE);
+        if (obtainedFile == null || legacyObtainedFile == null) return;
+
+        // If obtained already exists, migration is done
+        if (Files.exists(obtainedFile)) return;
+
+        // If legacy obtained doesn't exist, nothing to migrate.
+        if (!Files.exists(legacyObtainedFile)) return;
+
+        try
         {
+            // Only migrate if legacy obtained actually has data; if it's empty, don't bother.
+            Set<Integer> legacyData = readLocalJson(legacyObtainedFile);
+            if (legacyData.isEmpty())
+            {
+                return;
+            }
+
+            // Ensure directory exists
+            Files.createDirectories(obtainedFile.getParent());
+
+            // Move legacy file into the new obtained file name
+            try
+            {
+                Files.move(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (IOException moveFail)
+            {
+                // Fallback: copy + delete
+                Files.copy(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+                Files.deleteIfExists(legacyObtainedFile);
+            }
+
+            log.info("Choicer v3 migration: moved legacy obtained file {} -> {}",
+                    legacyObtainedFile.getFileName(), obtainedFile.getFileName());
+        }
+        catch (Exception e)
+        {
+            log.error("Choicer v3 migration: failed to migrate legacy obtained rolled.json -> obtained.json; refusing to proceed", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    /** Disk write + cloud mirror (debounced or immediate). */
+    private void saveInternal(long stampMillis, boolean debounced) {
+        if (!isExecutorAvailable()) {
             log.error("RolledItemsManager: executor unavailable; skipping save");
             return;
         }
@@ -325,30 +362,31 @@ public class RolledItemsManager
                 log.error("RolledItemsManager: file path unavailable; skipping save");
                 return;
             }
-            try
-            {
+            try {
                 rotateBackupIfExists(file);
                 Set<Integer> snap = snapshotRolled();
                 writeJsonAtomic(file, snap);
                 mirrorToCloud(stampMillis, debounced, snap);
                 dirty = false;
-            }
-            catch (IOException e)
-            {
+            } catch (IOException e) {
                 log.error("Error saving rolled items", e);
             }
         });
     }
 
-    /** Mirror to cloud, optionally debounced; uses provided snapshot to avoid re-locking. */
-    private void mirrorToCloud(long stampMillis, boolean debounced, Set<Integer> snapshot)
-    {
+    /**
+     * Mirror to cloud, optionally debounced; uses provided snapshot to avoid
+     * re-locking.
+     */
+    private void mirrorToCloud(long stampMillis, boolean debounced, Set<Integer> snapshot) {
         long now = System.currentTimeMillis();
-        if (debounced && (now - lastConfigWriteMs < CONFIG_DEBOUNCE_MS)) return;
+        if (debounced && (now - lastConfigWriteMs < CONFIG_DEBOUNCE_MS))
+            return;
         lastConfigWriteMs = now;
 
         String player = accountManager.getPlayerName();
-        if (player == null || player.isEmpty() || executor == null) return;
+        if (player == null || player.isEmpty() || executor == null)
+            return;
 
         final Set<Integer> snap = (snapshot != null) ? snapshot : snapshotRolled();
 
@@ -357,11 +395,8 @@ public class RolledItemsManager
             try
             {
                 configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snap, stampMillis);
-            }
-            catch (Exception e)
-            {
-                if (!configWriteWarned)
-                {
+            } catch (Exception e) {
+                if (!configWriteWarned) {
                     configWriteWarned = true;
                     log.error("Choicer: failed to mirror rolled set to ConfigManager (local saves intact).", e);
                 }
@@ -380,8 +415,7 @@ public class RolledItemsManager
         return true;
     }
 
-    private void safeNotifyChange()
-    {
+    private void safeNotifyChange() {
         Runnable cb = onChange;
         if (cb != null)
         {
@@ -393,7 +427,8 @@ public class RolledItemsManager
     private Path getFilePath(String fileName) throws IOException
     {
         String name = accountManager.getPlayerName();
-        if (name == null) throw new IOException("Player name is null");
+        if (name == null)
+            throw new IOException("Player name is null");
         Path dir = RUNELITE_DIR.toPath().resolve("choicer").resolve(name);
         Files.createDirectories(dir);
         return dir.resolve(fileName);
@@ -425,10 +460,13 @@ public class RolledItemsManager
         }
     }
 
-    /** Windows-safe: COPY current file to a timestamped backup with small retries; then prune. */
-    private void rotateBackupIfExists(Path file) throws IOException
-    {
-        if (!Files.exists(file)) return;
+    /**
+     * Windows-safe: COPY current file to a timestamped backup with small retries;
+     * then prune.
+     */
+    private void rotateBackupIfExists(Path file) throws IOException {
+        if (!Files.exists(file))
+            return;
 
         Path backups = file.getParent().resolve("backups");
         Files.createDirectories(backups);
@@ -437,17 +475,12 @@ public class RolledItemsManager
         Path bak = backups.resolve(file.getFileName() + "." + ts + ".bak");
 
         final int maxAttempts = 5;
-        for (int attempt = 1; ; attempt++)
-        {
-            try
-            {
+        for (int attempt = 1;; attempt++) {
+            try {
                 Files.copy(file, bak, StandardCopyOption.REPLACE_EXISTING);
                 break;
-            }
-            catch (FileSystemException fse)
-            {
-                if (attempt >= maxAttempts)
-                {
+            } catch (FileSystemException fse) {
+                if (attempt >= maxAttempts) {
                     log.error("Backup copy failed after {} attempts for {}", attempt, file, fse);
                     break;
                 }
@@ -456,21 +489,29 @@ public class RolledItemsManager
             }
         }
 
-        try (java.util.stream.Stream<Path> stream = Files.list(backups))
-        {
+        try (java.util.stream.Stream<Path> stream = Files.list(backups)) {
             stream
                     .filter(p -> p.getFileName().toString().startsWith(file.getFileName() + "."))
                     .sorted(Comparator.comparing(Path::getFileName).reversed())
                     .skip(MAX_BACKUPS)
-                    .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (IOException ignored) {
+                        }
+                    });
         }
     }
 
-    /** Write JSON to .tmp and atomically replace the main file; mark self-write for watcher echo suppression. */
-    private void writeJsonAtomic(Path file, Set<Integer> data) throws IOException
-    {
+    /**
+     * Write JSON to .tmp and atomically replace the main file; mark self-write for
+     * watcher echo suppression.
+     */
+    private void writeJsonAtomic(Path file, Set<Integer> data) throws IOException {
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-        try (BufferedWriter w = Files.newBufferedWriter(tmp)) { gson.toJson(data, w); }
+        try (BufferedWriter w = Files.newBufferedWriter(tmp)) {
+            gson.toJson(data, w);
+        }
         safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         lastSelfWriteMs = System.currentTimeMillis();
     }
@@ -494,17 +535,15 @@ public class RolledItemsManager
         catch (IOException e) { return 0L; }
     }
 
-    private Set<Integer> readLocalJson(Path file)
-    {
+    private Set<Integer> readLocalJson(Path file) {
         Set<Integer> local = new LinkedHashSet<>();
         if (file == null || !Files.exists(file)) return local;
         try (Reader r = Files.newBufferedReader(file))
         {
             Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
-            if (loaded != null) local.addAll(loaded);
-        }
-        catch (IOException e)
-        {
+            if (loaded != null)
+                local.addAll(loaded);
+        } catch (IOException e) {
             log.error("Error reading rolled items JSON", e);
         }
         return local;
@@ -523,23 +562,21 @@ public class RolledItemsManager
         watchService = null;
     }
 
-    private void runWatcherLoop(String target)
-    {
+    private void runWatcherLoop(String target) {
         long lastHandled = 0L;
-        try
-        {
-            while (watcherRunning)
-            {
+        try {
+            while (watcherRunning) {
                 WatchKey key;
-                try { key = watchService.take(); }
-                catch (InterruptedException | ClosedWatchServiceException ie) { break; }
+                try {
+                    key = watchService.take();
+                } catch (InterruptedException | ClosedWatchServiceException ie) {
+                    break;
+                }
 
                 boolean relevant = false;
-                for (WatchEvent<?> ev : key.pollEvents())
-                {
+                for (WatchEvent<?> ev : key.pollEvents()) {
                     Object ctx = ev.context();
-                    if (ctx instanceof Path && ((Path) ctx).getFileName().toString().equals(target))
-                    {
+                    if (ctx instanceof Path && ((Path) ctx).getFileName().toString().equals(target)) {
                         relevant = true;
                     }
                 }
@@ -547,23 +584,20 @@ public class RolledItemsManager
                 if (!relevant) continue;
 
                 long now = System.currentTimeMillis();
-                if (now - lastSelfWriteMs <= SELF_WRITE_GRACE_MS) continue;
-                if (now - lastHandled < FS_DEBOUNCE_MS) continue;
+                if (now - lastSelfWriteMs <= SELF_WRITE_GRACE_MS)
+                    continue;
+                if (now - lastHandled < FS_DEBOUNCE_MS)
+                    continue;
                 lastHandled = now;
 
-                try
-                {
+                try {
                     reconcileWithCloud(true);
                     safeNotifyChange();
-                }
-                catch (Throwable t)
-                {
+                } catch (Throwable t) {
                     log.error("Rolled watcher reconcile failed", t);
                 }
             }
-        }
-        finally
-        {
+        } finally {
             closeWatchServiceQuietly();
             watcherRunning = false;
         }

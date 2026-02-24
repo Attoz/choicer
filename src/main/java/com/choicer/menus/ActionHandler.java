@@ -34,9 +34,9 @@ import java.util.function.Consumer;
 public class ActionHandler {
 
 	private static final Set<MenuAction> disabledActions = EnumSet.of(
-			MenuAction.CC_OP,               // inventory “Use” on locked
-			MenuAction.WIDGET_TARGET,       // “Use” on widgets
-			MenuAction.WIDGET_TARGET_ON_WIDGET  // “Use” on widget -> widget
+			MenuAction.CC_OP, // inventory “Use” on locked
+			MenuAction.WIDGET_TARGET, // “Use” on widgets
+			MenuAction.WIDGET_TARGET_ON_WIDGET // “Use” on widget -> widget
 	);
 
 	private static final Set<MenuAction> GROUND_ACTIONS = EnumSet.of(
@@ -80,16 +80,19 @@ public class ActionHandler {
 		return plugin.getItemManager().canonicalize(mapped);
 	}
 
-	private final HashSet<Integer> enabledUIs = new HashSet<>() {{
-		for (EnabledUI ui : EnabledUI.values()) add(ui.getId());
-	}};
+	private final HashSet<Integer> enabledUIs = new HashSet<>() {
+		{
+			for (EnabledUI ui : EnabledUI.values())
+				add(ui.getId());
+		}
+	};
 
 	@Inject
 	private Client client;
 	@Inject
 	private EventBus eventBus;
-    @Inject
-    private ChoicerConfig config;
+	@Inject
+	private ChoicerConfig config;
 	@Inject
 	private ChoicerPlugin plugin;
 	@Inject
@@ -101,7 +104,8 @@ public class ActionHandler {
 	private int enabledUIOpen = -1;
 
 	// A no-op click handler that marks a menu entry as disabled.
-	private final Consumer<MenuEntry> DISABLED = e -> { };
+	private final Consumer<MenuEntry> DISABLED = e -> {
+	};
 
 	public void startUp() {
 		eventBus.register(this);
@@ -117,8 +121,7 @@ public class ActionHandler {
 		return enabledUIOpen != -1;
 	}
 
-	private EnabledUI currentEnabledUi()
-	{
+	private EnabledUI currentEnabledUi() {
 		return enabledUIOpen == -1 ? null : EnabledUI.fromGroupId(enabledUIOpen);
 	}
 
@@ -129,7 +132,8 @@ public class ActionHandler {
 
 	@Subscribe
 	public void onWidgetClosed(WidgetClosed event) {
-		if (event.getGroupId() == enabledUIOpen) enabledUIOpen = -1;
+		if (event.getGroupId() == enabledUIOpen)
+			enabledUIOpen = -1;
 	}
 
 	@Subscribe
@@ -140,11 +144,11 @@ public class ActionHandler {
 
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
-		if (inactive()) return;
+		if (inactive())
+			return;
 
 		EnabledUI ui = currentEnabledUi();
-		if (ui != null && !ui.isGreyLockedItems())
-		{
+		if (ui != null && !ui.isGreyLockedItems()) {
 			return;
 		}
 
@@ -168,6 +172,9 @@ public class ActionHandler {
 			if (config.deprioritizeLockedOptions()) {
 				entry.setDeprioritized(true);
 			}
+			if (config.deprioritizeLockedOptions()) {
+				entry.setDeprioritized(true);
+			}
 		}
 	}
 
@@ -185,8 +192,7 @@ public class ActionHandler {
 	/**
 	 * Returns true if the entry appears to be for a ground item.
 	 */
-	private boolean isGroundItem(MenuEntry entry)
-	{
+	private boolean isGroundItem(MenuEntry entry) {
 		return GROUND_ACTIONS.contains(entry.getType());
 	}
 
@@ -194,15 +200,13 @@ public class ActionHandler {
 	 * @param itemId canonicalized item ID of a ground item
 	 * @return true if it’s tracked by the plugin and still locked
 	 */
-	private boolean isLockedGroundItem(int itemId)
-	{
+	private boolean isLockedGroundItem(int itemId) {
 		return plugin.isInPlay(itemId)
 				&& !plugin.isNotTracked(itemId)
 				&& !rolledItemsManager.isRolled(itemId);
 	}
 
-	private boolean isHealthOrbCure(MenuEntry entry)
-	{
+	private boolean isHealthOrbCure(MenuEntry entry) {
 		if (entry.getType() != MenuAction.CC_OP)
 			return false;
 
@@ -216,12 +220,12 @@ public class ActionHandler {
 	}
 
 	/**
-	 * This method handles non-ground items (or any other cases) by checking if the item is enabled.
+	 * This method handles non-ground items (or any other cases) by checking if the
+	 * item is enabled.
 	 * It returns true if the action should be allowed.
 	 */
 	private boolean isEnabled(int id, MenuEntry entry, MenuAction action) {
-		if (isHealthOrbCure(entry))
-		{
+		if (isHealthOrbCure(entry)) {
 			return true;
 		}
 

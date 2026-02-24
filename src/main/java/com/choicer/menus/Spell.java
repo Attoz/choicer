@@ -5,8 +5,7 @@ import lombok.Getter;
 import java.util.HashSet;
 
 @Getter
-public enum Spell
-{
+public enum Spell {
 	// STANDARD
 	WIND_STRIKE("Wind Strike"),
 	WATER_STRIKE("Water Strike"),
@@ -153,23 +152,19 @@ public enum Spell
 
 	private final String spellName;
 
-	Spell(String spellName)
-	{
+	Spell(String spellName) {
 		this.spellName = spellName;
 	}
 
 	private static final HashSet<String> ALL_SPELLS = new HashSet<>();
 
-	static
-	{
-		for (Spell spell : Spell.values())
-		{
+	static {
+		for (Spell spell : Spell.values()) {
 			ALL_SPELLS.add(spell.getSpellName());
 		}
 	}
 
-	public static boolean isSpell(String target)
-	{
+	public static boolean isSpell(String target) {
 		return ALL_SPELLS.contains(target);
 	}
 }

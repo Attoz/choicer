@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Manages the roll animation for rolling/unlocking items.
- * Obtained items trigger rolls; rolled items become usable when also obtained.
+ * Obtained items trigger rolls; selected choice items become unlocked.
  */
 @Singleton
 @Slf4j
@@ -42,7 +42,7 @@ public class RollAnimationManager {
     @Inject
     private ClientThread clientThread;
     @Inject
-    private RolledItemsManager rolledManager;
+    private UnlockedItemsManager unlockedManager;
     @Inject
     private ChoicerOverlay choicerOverlay;
     @Inject
@@ -179,7 +179,7 @@ public class RollAnimationManager {
             }
 
             if (itemToUnlock != 0) {
-                rolledManager.markRolled(itemToUnlock);
+                unlockedManager.unlockItem(itemToUnlock);
             }
 
             final boolean wasManualRoll = isManualRoll();
@@ -188,23 +188,23 @@ public class RollAnimationManager {
             final int choiceCount = choicerOptions.size();
             final int queuedId = queuedItemId;
             clientThread.invoke(() -> {
-                String rolledTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce),
+                String unlockedTag = ColorUtil.wrapWithColorTag(getItemName(finalItemToAnnounce),
                         config.unlockedItemColor());
                 String message;
                 if (wasManualRoll) {
                     String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
                     message = announceChoicer
-                            ? "Choicer rolled " + rolledTag + " after " + pressTag + " presented "
+                            ? "Choicer rolled " + unlockedTag + " after " + pressTag + " presented "
                                     + choiceCount + " choices."
-                            : "Rolled " + rolledTag + " by " + pressTag;
+                            : "Rolled " + unlockedTag + " by " + pressTag;
                 } else if (queuedId > 0) {
                     String obtainedTag = ColorUtil.wrapWithColorTag(getItemName(queuedId), config.rolledItemColor());
                     message = announceChoicer
-                            ? "Choicer rolled " + rolledTag + " after obtaining " + obtainedTag + " presented "
+                            ? "Choicer rolled " + unlockedTag + " after obtaining " + obtainedTag + " presented "
                                     + choiceCount + " choices."
-                            : "Rolled " + rolledTag + " by obtaining " + obtainedTag;
+                            : "Rolled " + unlockedTag + " by obtaining " + obtainedTag;
                 } else {
-                    message = "Rolled " + rolledTag;
+                    message = "Rolled " + unlockedTag;
                 }
                 client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
                 if (choicerPanel != null) {
@@ -240,7 +240,7 @@ public class RollAnimationManager {
         }
         List<Integer> locked = new ArrayList<>();
         for (int id : allTradeableItems) {
-            if (!rolledManager.isRolled(id)) {
+            if (!unlockedManager.isUnlocked(id)) {
                 locked.add(id);
             }
         }
@@ -286,7 +286,7 @@ public class RollAnimationManager {
         int target = Math.max(2, Math.min(5, config.choicerOptionCount()));
         LinkedHashSet<Integer> options = new LinkedHashSet<>();
         boolean hasTradeableOption = isTradeableItem(obtainedItemId);
-        if (obtainedItemId != 0 && !rolledManager.isRolled(obtainedItemId)) {
+        if (obtainedItemId != 0 && !unlockedManager.isUnlocked(obtainedItemId)) {
             options.add(obtainedItemId);
         }
 

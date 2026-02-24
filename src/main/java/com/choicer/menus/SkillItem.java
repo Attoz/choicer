@@ -7,8 +7,7 @@ import java.util.HashSet;
 import java.util.HashMap;
 
 @Getter
-public enum SkillItem
-{
+public enum SkillItem {
 
 	BRONZE_AXE(ItemID.BRONZE_AXE, SkillOp.CHOP_DOWN),
 	IRON_AXE(ItemID.IRON_AXE, SkillOp.CHOP_DOWN),
@@ -134,42 +133,35 @@ public enum SkillItem
 	private final SkillOp option;
 	private final boolean requiresUnlock;
 
-	SkillItem(int id, SkillOp option)
-	{
+	SkillItem(int id, SkillOp option) {
 		this(id, option, true);
 	}
 
-	SkillItem(int id, SkillOp option, boolean requiresUnlock)
-	{
+	SkillItem(int id, SkillOp option, boolean requiresUnlock) {
 		this.id = id;
 		this.option = option;
 		this.requiresUnlock = requiresUnlock;
 	}
 
-	public SkillOp getSkillOp()
-	{
+	public SkillOp getSkillOp() {
 		return option;
 	}
 
 	private static final HashSet<Integer> ALL_SKILL_ITEMS = new HashSet<>();
 	private static final HashMap<Integer, SkillItem> ID_TO_ITEM = new HashMap<>();
 
-	static
-	{
-		for (SkillItem skillItem : SkillItem.values())
-		{
+	static {
+		for (SkillItem skillItem : SkillItem.values()) {
 			ALL_SKILL_ITEMS.add(skillItem.getId());
 			ID_TO_ITEM.put(skillItem.getId(), skillItem);
 		}
 	}
 
-	public static boolean isSkillItem(int id)
-	{
+	public static boolean isSkillItem(int id) {
 		return ALL_SKILL_ITEMS.contains(id);
 	}
 
-	public static SkillItem fromId(int id)
-	{
+	public static SkillItem fromId(int id) {
 		return ID_TO_ITEM.get(id);
 	}
 }

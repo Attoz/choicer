@@ -33,10 +33,9 @@ import java.util.concurrent.*;
  */
 @Slf4j
 @Singleton
-public class DropFetcher
-{
-    private static final String USER_AGENT =
-            "RuneLite-Choicer/" + Optional.ofNullable(DropFetcher.class.getPackage().getImplementationVersion())
+public class DropFetcher {
+    private static final String USER_AGENT = "RuneLite-Choicer/"
+            + Optional.ofNullable(DropFetcher.class.getPackage().getImplementationVersion())
                     .orElse("dev");
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
@@ -44,10 +43,9 @@ public class DropFetcher
     private ExecutorService fetchExecutor;
 
     @Inject
-    public DropFetcher(OkHttpClient httpClient, ItemManager itemManager, ClientThread clientThread)
-    {
+    public DropFetcher(OkHttpClient httpClient, ItemManager itemManager, ClientThread clientThread) {
         this.httpClient = httpClient;
-        this.itemManager  = itemManager;
+        this.itemManager = itemManager;
         this.clientThread = clientThread;
     }
 
@@ -56,8 +54,7 @@ public class DropFetcher
      * 1) Download + parse document (BG thread)
      * 2) Resolve item IDs on client thread using ItemManager.search (canonicalized)
      */
-    public CompletableFuture<NpcDropData> fetch(int npcId, String name, int level)
-    {
+    public CompletableFuture<NpcDropData> fetch(int npcId, String name, int level) {
         return CompletableFuture.supplyAsync(() -> {
             String url = buildWikiUrl(npcId, name);
             String html = fetchHtml(url);
@@ -96,9 +93,10 @@ public class DropFetcher
         });
     }
 
-    /** Resolve an item name to an ID using ItemManager.search only (canonicalized). */
-    private int resolveItemId(String itemName)
-    {
+    /**
+     * Resolve an item name to an ID using ItemManager.search only (canonicalized).
+     */
+    private int resolveItemId(String itemName) {
         if (itemName == null || itemName.isEmpty()) {
             return 0;
         }
@@ -124,18 +122,15 @@ public class DropFetcher
     }
 
     /** Extract drop table sections (skips Nothing rows). */
-    private List<DropTableSection> parseSections(Document doc)
-    {
+    private List<DropTableSection> parseSections(Document doc) {
         Elements tables = doc.select("table.item-drops");
 
         List<DropTableSection> sections = new ArrayList<>();
 
-        for (Element table : tables)
-        {
+        for (Element table : tables) {
             String header = "Drops";
             Element prev = table.previousElementSibling();
-            while (prev != null)
-            {
+            while (prev != null) {
                 String tag = prev.tagName();
                 if (tag != null && tag.matches("h[2-4]")) {
                     header = prev.text();
@@ -159,8 +154,7 @@ public class DropFetcher
                 items.add(new DropItem(0, name, rarity));
             }
 
-            if (!items.isEmpty())
-            {
+            if (!items.isEmpty()) {
                 sections.add(new DropTableSection(header, items));
             }
         }
@@ -169,16 +163,13 @@ public class DropFetcher
     }
 
     /** Attempt to parse the combat level from the NPC infobox. */
-    private int parseCombatLevel(Document doc)
-    {
+    private int parseCombatLevel(Document doc) {
         Element infobox = doc.selectFirst("table.infobox");
-        if (infobox == null)
-        {
+        if (infobox == null) {
             return 0;
         }
         Elements rows = infobox.select("tr");
-        for (Element row : rows)
-        {
+        for (Element row : rows) {
             Element th = row.selectFirst("th");
             Element td = row.selectFirst("td");
             if (th != null && td != null) {
@@ -202,11 +193,9 @@ public class DropFetcher
     }
 
     /** Resolve the canonical wiki page ID for the provided document. */
-    private int resolveNpcId(Document doc)
-    {
+    private int resolveNpcId(Document doc) {
         Element link = doc.selectFirst("link[rel=canonical]");
-        if (link == null)
-        {
+        if (link == null) {
             return 0;
         }
 
@@ -222,10 +211,8 @@ public class DropFetcher
                 .header("User-Agent", USER_AGENT)
                 .build();
 
-        try (Response res = httpClient.newCall(req).execute())
-        {
-            if (!res.isSuccessful())
-            {
+        try (Response res = httpClient.newCall(req).execute()) {
+            if (!res.isSuccessful()) {
                 log.warn("Failed to resolve NPC ID for {}: HTTP {}", title, res.code());
                 return 0;
             }
@@ -236,37 +223,30 @@ public class DropFetcher
                     .getAsJsonObject("query")
                     .getAsJsonObject("pages");
 
-            for (Map.Entry<String, JsonElement> entry : pages.getAsJsonObject().entrySet())
-            {
+            for (Map.Entry<String, JsonElement> entry : pages.getAsJsonObject().entrySet()) {
                 JsonElement page = entry.getValue();
-                if (page.getAsJsonObject().has("pageid"))
-                {
+                if (page.getAsJsonObject().has("pageid")) {
                     return page.getAsJsonObject().get("pageid").getAsInt();
                 }
             }
 
             log.warn("No page ID found for title {}", title);
-        }
-        catch (IOException ex)
-        {
+        } catch (IOException ex) {
             log.warn("Error resolving NPC ID for {}", title, ex);
         }
         return 0;
     }
 
     /** Query the wiki's search API for NPC names matching the provided text. */
-    public List<String> searchNpcNames(String query)
-    {
+    public List<String> searchNpcNames(String query) {
         String url = "https://oldschool.runescape.wiki/api.php?action=opensearch&format=json&limit=20&namespace=0&search="
                 + URLEncoder.encode(query, StandardCharsets.UTF_8);
         Request req = new Request.Builder()
                 .url(url)
                 .header("User-Agent", USER_AGENT)
                 .build();
-        try (Response res = httpClient.newCall(req).execute())
-        {
-            if (!res.isSuccessful())
-            {
+        try (Response res = httpClient.newCall(req).execute()) {
+            if (!res.isSuccessful()) {
                 throw new IOException("HTTP " + res.code());
             }
             String body = res.body().string();
@@ -277,25 +257,20 @@ public class DropFetcher
                 names.add(titles.get(i).getAsString());
             }
             return names;
-        }
-        catch (IOException ex)
-        {
+        } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
     }
 
-    private String buildWikiUrl(int npcId, String name)
-    {
+    private String buildWikiUrl(int npcId, String name) {
         String fallback = URLEncoder.encode(name.replace(' ', '_'), StandardCharsets.UTF_8);
         StringBuilder url = new StringBuilder("https://oldschool.runescape.wiki/w/Special:Lookup?type=npc");
 
-        if (npcId > 0)
-        {
+        if (npcId > 0) {
             url.append("&id=").append(npcId);
         }
 
-        if (!fallback.isEmpty())
-        {
+        if (!fallback.isEmpty()) {
             url.append("&name=").append(fallback);
         }
 
@@ -303,40 +278,32 @@ public class DropFetcher
         return url.toString();
     }
 
-    private String fetchHtml(String url)
-    {
+    private String fetchHtml(String url) {
         Request req = new Request.Builder()
                 .url(url)
                 .header("User-Agent", USER_AGENT)
                 .build();
-        try (Response res = httpClient.newCall(req).execute())
-        {
-            if (!res.isSuccessful()) throw new IOException("HTTP " + res.code());
+        try (Response res = httpClient.newCall(req).execute()) {
+            if (!res.isSuccessful())
+                throw new IOException("HTTP " + res.code());
             return res.body().string();
-        }
-        catch (IOException ex)
-        {
+        } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }
     }
 
     /** Creates the fetch executor if it is missing or has been shut down. */
-    public void startUp()
-    {
-        if (fetchExecutor == null || fetchExecutor.isShutdown() || fetchExecutor.isTerminated())
-        {
+    public void startUp() {
+        if (fetchExecutor == null || fetchExecutor.isShutdown() || fetchExecutor.isTerminated()) {
             fetchExecutor = Executors.newFixedThreadPool(
                     4,
-                    new ThreadFactoryBuilder().setNameFormat("dropfetch-%d").build()
-            );
+                    new ThreadFactoryBuilder().setNameFormat("dropfetch-%d").build());
         }
     }
 
     /** Shut down the executor service. */
-    public void shutdown()
-    {
-        if (fetchExecutor != null)
-        {
+    public void shutdown() {
+        if (fetchExecutor != null) {
             fetchExecutor.shutdownNow();
             fetchExecutor = null;
         }

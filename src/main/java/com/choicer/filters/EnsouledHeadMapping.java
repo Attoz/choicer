@@ -9,8 +9,10 @@ import java.util.Map;
 import net.runelite.api.gameval.ItemID;
 
 /**
- * Maps ensouled head item IDs (including untradeable drop IDs) to their tradeable IDs.
- * Non-ensouled or unknown IDs are returned unchanged by {@link #toTradeableId(int)}.
+ * Maps ensouled head item IDs (including untradeable drop IDs) to their
+ * tradeable IDs.
+ * Non-ensouled or unknown IDs are returned unchanged by
+ * {@link #toTradeableId(int)}.
  */
 public final class EnsouledHeadMapping {
 
@@ -31,7 +33,7 @@ public final class EnsouledHeadMapping {
         pair.accept(ItemID.ARCEUUS_CORPSE_MINOTAUR_INITIAL, ItemID.ARCEUUS_CORPSE_MINOTAUR); // Minotaur
         pair.accept(ItemID.ARCEUUS_CORPSE_SCORPION_INITIAL, ItemID.ARCEUUS_CORPSE_SCORPION); // Scorpion
         pair.accept(ItemID.ARCEUUS_CORPSE_BEAR_INITIAL, ItemID.ARCEUUS_CORPSE_BEAR); // Bear
-        pair.accept(ItemID.ARCEUUS_CORPSE_UNICORN_INITIAL, ItemID.ARCEUUS_CORPSE_UNICORN ); // Unicorn
+        pair.accept(ItemID.ARCEUUS_CORPSE_UNICORN_INITIAL, ItemID.ARCEUUS_CORPSE_UNICORN); // Unicorn
         pair.accept(ItemID.ARCEUUS_CORPSE_DOG_INITIAL, ItemID.ARCEUUS_CORPSE_DOG); // Dog
         pair.accept(ItemID.ARCEUUS_CORPSE_CHAOSDRUID_INITIAL, ItemID.ARCEUUS_CORPSE_CHAOSDRUID); // Chaos Druid
         pair.accept(ItemID.ARCEUUS_CORPSE_GIANT_INITIAL, ItemID.ARCEUUS_CORPSE_GIANT); // Giant
@@ -44,7 +46,7 @@ public final class EnsouledHeadMapping {
         pair.accept(ItemID.ARCEUUS_CORPSE_BLOODVELD_INITIAL, ItemID.ARCEUUS_CORPSE_BLOODVELD); // Bloodveld
         pair.accept(ItemID.ARCEUUS_CORPSE_TZHAAR_INITIAL, ItemID.ARCEUUS_CORPSE_TZHAAR); // TzHaar
         pair.accept(ItemID.ARCEUUS_CORPSE_DEMON_INITIAL, ItemID.ARCEUUS_CORPSE_DEMON); // Demon
-        pair.accept(ItemID.ARCEUUS_CORPSE_AVIANSIE_INITIAL, ItemID.ARCEUUS_CORPSE_AVIANSIE); //Aviansie
+        pair.accept(ItemID.ARCEUUS_CORPSE_AVIANSIE_INITIAL, ItemID.ARCEUUS_CORPSE_AVIANSIE); // Aviansie
         pair.accept(ItemID.ARCEUUS_CORPSE_ABYSSAL_INITIAL, ItemID.ARCEUUS_CORPSE_ABYSSAL); // Abyssal
         pair.accept(ItemID.ARCEUUS_CORPSE_DRAGON_INITIAL, ItemID.ARCEUUS_CORPSE_DRAGON); // Dragon
         pair.accept(ItemID.ARCEUUS_CORPSE_HELLHOUND_INITIAL, ItemID.ARCEUUS_CORPSE_HELLHOUND); // Hellhound
@@ -52,11 +54,13 @@ public final class EnsouledHeadMapping {
         ENSOULED_CANONICAL_ID = Collections.unmodifiableMap(idMap);
     }
 
-    private EnsouledHeadMapping() { /* utility class, no instances */ }
+    private EnsouledHeadMapping() {
+        /* utility class, no instances */ }
 
     /**
      * Returns the tradeable ID for any ensouled head item ID.
-     * If the ID is already tradeable or not recognized as an ensouled head, it's returned unchanged.
+     * If the ID is already tradeable or not recognized as an ensouled head, it's
+     * returned unchanged.
      */
     public static int toTradeableId(int itemId) {
         return ENSOULED_CANONICAL_ID.getOrDefault(itemId, itemId);

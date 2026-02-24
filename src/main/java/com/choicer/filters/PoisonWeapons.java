@@ -8,10 +8,10 @@ import java.util.Set;
 
 /**
  * Enum representing every poisonable weapon and its four variants:
- *   - Base (unpoisoned)
- *   - (p)
- *   - (p+)
- *   - (p++)
+ * - Base (unpoisoned)
+ * - (p)
+ * - (p+)
+ * - (p++)
  */
 @Getter
 public enum PoisonWeapons {
@@ -152,7 +152,8 @@ public enum PoisonWeapons {
     }
 
     /**
-     * Returns an unmodifiable set of all base weapon ids from poisonable weapons, excluding poison constants.
+     * Returns an unmodifiable set of all base weapon ids from poisonable weapons,
+     * excluding poison constants.
      */
     public static Set<Integer> getAllBaseWeaponIds() {
         Set<Integer> ids = new HashSet<>();
@@ -172,7 +173,8 @@ public enum PoisonWeapons {
      */
     public static boolean isPoisonableWeapon(int itemId) {
         for (PoisonWeapons weapon : values()) {
-            if (weapon.name().startsWith("WEAPON_POISON")) continue;
+            if (weapon.name().startsWith("WEAPON_POISON"))
+                continue;
             if (weapon.matches(itemId)) {
                 return true;
             }
@@ -184,19 +186,22 @@ public enum PoisonWeapons {
      * Checks if a poisonable weapon variant is eligible.
      * Base weapons are always eligible.
      * For poisoned variants:
-     *   - (p) requires WEAPON_POISON,
-     *   - (p+) requires WEAPON_POISON_,
-     *   - (p++) requires WEAPON_POISON__,
+     * - (p) requires WEAPON_POISON,
+     * - (p+) requires WEAPON_POISON_,
+     * - (p++) requires WEAPON_POISON__,
      * to be unlocked along with the base weapon.
-     * @param itemId the item ID to check
-     * @param requireWeaponPoison if true, the corresponding global poison must be unlocked
-     * @param unlockedItems the set of unlocked item IDs
+     * 
+     * @param itemId              the item ID to check
+     * @param requireWeaponPoison if true, the corresponding global poison must be
+     *                            unlocked
+     * @param unlockedItems       the set of unlocked item IDs
      * @return true if eligible; false otherwise
      */
     public static boolean isPoisonVariantEligible(int itemId, boolean requireWeaponPoison, Set<Integer> unlockedItems) {
         PoisonWeapons matchingWeapon = null;
         for (PoisonWeapons weapon : values()) {
-            if (weapon.name().startsWith("WEAPON_POISON")) continue;
+            if (weapon.name().startsWith("WEAPON_POISON"))
+                continue;
             if (weapon.matches(itemId)) {
                 matchingWeapon = weapon;
                 break;
@@ -222,7 +227,8 @@ public enum PoisonWeapons {
         } else {
             return true;
         }
-        boolean eligible = unlockedItems.contains(matchingWeapon.getBaseId()) && unlockedItems.contains(requiredGlobalId);
+        boolean eligible = unlockedItems.contains(matchingWeapon.getBaseId())
+                && unlockedItems.contains(requiredGlobalId);
         return eligible;
     }
 

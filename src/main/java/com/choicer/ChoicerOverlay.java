@@ -36,12 +36,12 @@ import java.util.function.Supplier;
 
 /**
  * Overlay used for Choicer rolls.
- * Presents the roll strip vertically with a configurable number of visible slots.
+ * Presents the roll strip vertically with a configurable number of visible
+ * slots.
  */
 @Singleton
 @Slf4j
-public class ChoicerOverlay extends Overlay implements RollOverlay
-{
+public class ChoicerOverlay extends Overlay implements RollOverlay {
     private static final float SNAP_NEXT_THRESHOLD = 0.55f;
     private static final long SNAP_DURATION_MS = 420L;
     private static final long HIGHLIGHT_DURATION_MS = 3000L;
@@ -60,7 +60,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final float CHOICE_SLOT_SCALE = 1.0f;
     private static final int MIN_CHOICE_SLOT_WIDTH = 132;
     private static final int MIN_CHOICE_SLOT_HEIGHT = 90;
-    // Keep scroll slots as wide as the eventual choice buttons so icon centers align.
+    // Keep scroll slots as wide as the eventual choice buttons so icon centers
+    // align.
     private static final int MIN_SCROLL_SLOT_WIDTH = MIN_CHOICE_SLOT_WIDTH;
     private static final int SCROLL_ICON_TARGET = 64;
     private static final int SCROLL_ICON_TARGET_COMPACT = 52;
@@ -75,8 +76,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final Color TRADEABLE_GLOW_OUTER = new Color(196, 168, 110, 0);
     private static final Color UNTRADEABLE_GLOW_INNER = new Color(128, 176, 148, 170);
     private static final Color UNTRADEABLE_GLOW_OUTER = new Color(148, 178, 160, 0);
-    private static final Color[] TRADEABLE_GLOW = new Color[]{TRADEABLE_GLOW_INNER, TRADEABLE_GLOW_OUTER};
-    private static final Color[] UNTRADEABLE_GLOW = new Color[]{UNTRADEABLE_GLOW_INNER, UNTRADEABLE_GLOW_OUTER};
+    private static final Color[] TRADEABLE_GLOW = new Color[] { TRADEABLE_GLOW_INNER, TRADEABLE_GLOW_OUTER };
+    private static final Color[] UNTRADEABLE_GLOW = new Color[] { UNTRADEABLE_GLOW_INNER, UNTRADEABLE_GLOW_OUTER };
 
     private static final int ICON_COUNT = 3;
     private static final int DRAW_COUNT = ICON_COUNT + 1;
@@ -98,6 +99,9 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private static final int CHOICE_LABEL_RESERVED_HEIGHT = 34;
     private static final int CHOICE_ICON_TOP_PADDING = 8;
     private static final int CHOICE_BUTTON_Y_OFFSET = 12;
+    private static final float RESPONSIVE_BASE_VIEWPORT_HEIGHT = 900f;
+    private static final float RESPONSIVE_MIN_SCALE = 0.62f;
+    private static final float RESPONSIVE_MAX_SCALE = 1.24f;
     private static final long PULSE_PERIOD_NS = 1_400_000_000L;
     private static final long SHIMMER_PERIOD_NS = 2_600_000_000L;
     private static final float PULSE_MIN_ALPHA = 0.07f;
@@ -124,8 +128,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private final Random spinRandom = new Random();
     private final Set<Integer> uniqueRollItems = Collections.synchronizedSet(new HashSet<>());
 
-    @Inject private AudioPlayer audioPlayer;
-    @Inject private ChoicerConfig config;
+    @Inject
+    private AudioPlayer audioPlayer;
+    @Inject
+    private ChoicerConfig config;
 
     private volatile boolean isAnimating = false;
     private long rollDurationMs;
@@ -155,68 +161,51 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     private volatile int resolveSelectedIndex = -1;
     private volatile int resolveSelectedItemId = 0;
 
-    public void setChoicerOptions(List<Integer> options)
-    {
-        if (options == null)
-        {
+    public void setChoicerOptions(List<Integer> options) {
+        if (options == null) {
             currentOptions = Collections.emptyList();
-        }
-        else
-        {
+        } else {
             currentOptions = new ArrayList<>(options);
         }
         columnCount = determineColumnCount();
-        for (int i = 0; i < columnOffsetAdjust.length; i++)
-        {
+        for (int i = 0; i < columnOffsetAdjust.length; i++) {
             columnOffsetAdjust[i] = spinRandom.nextFloat() * DEFAULT_STEP;
             columnSpeedScale[i] = 0.75f + spinRandom.nextFloat() * 0.45f; // 0.75x – 1.2x
         }
     }
 
-    private int determineColumnCount()
-    {
-        if (currentOptions == null || currentOptions.isEmpty())
-        {
+    private int determineColumnCount() {
+        if (currentOptions == null || currentOptions.isEmpty()) {
             return 2;
         }
         int capped = Math.max(2, Math.min(5, currentOptions.size()));
-        if (currentOptions.size() > capped)
-        {
+        if (currentOptions.size() > capped) {
             currentOptions = new ArrayList<>(currentOptions.subList(0, capped));
         }
         return capped;
     }
 
-    public void setSelectionPending(boolean pending)
-    {
+    public void setSelectionPending(boolean pending) {
         boolean wasPending = this.selectionPending;
         this.selectionPending = pending;
-        if (pending)
-        {
-            if (!wasPending)
-            {
+        if (pending) {
+            if (!wasPending) {
                 selectionStartMs = System.currentTimeMillis();
             }
             syncSelectionOptionsWithColumns();
-        }
-        else
-        {
-            synchronized (columnHitboxes)
-            {
+        } else {
+            synchronized (columnHitboxes) {
                 columnHitboxes.clear();
             }
         }
     }
 
-    public boolean isSelectionPending()
-    {
+    public boolean isSelectionPending() {
         return selectionPending;
     }
 
-    public long startSelectionResolveAnimation(int selectedItemId)
-    {
-        if (selectedItemId <= 0)
-        {
+    public long startSelectionResolveAnimation(int selectedItemId) {
+        if (selectedItemId <= 0) {
             resolveAnimating = false;
             return 0L;
         }
@@ -232,15 +221,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         return RESOLVE_DURATION_MS + RESOLVE_HOLD_MS;
     }
 
-    public Integer getOptionAt(int x, int y)
-    {
-        synchronized (columnHitboxes)
-        {
-            for (int i = 0; i < columnHitboxes.size(); i++)
-            {
+    public Integer getOptionAt(int x, int y) {
+        synchronized (columnHitboxes) {
+            for (int i = 0; i < columnHitboxes.size(); i++) {
                 Rectangle rect = columnHitboxes.get(i);
-                if (rect.contains(x, y) && i < currentOptions.size())
-                {
+                if (rect.contains(x, y) && i < currentOptions.size()) {
                     return currentOptions.get(i);
                 }
             }
@@ -251,10 +236,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     /**
      * Exposes the current hitboxes for tests without leaking the internal list.
      */
-    List<Rectangle> getCurrentHitboxes()
-    {
-        synchronized (columnHitboxes)
-        {
+    List<Rectangle> getCurrentHitboxes() {
+        synchronized (columnHitboxes) {
             List<Rectangle> copy = new ArrayList<>(columnHitboxes.size());
             for (Rectangle rect : columnHitboxes)
             {
@@ -264,41 +247,31 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         }
     }
 
-    private void syncSelectionOptionsWithColumns()
-    {
+    private void syncSelectionOptionsWithColumns() {
         List<Integer> snapped = captureSnappedItems();
-        if (!snapped.isEmpty())
-        {
+        if (!snapped.isEmpty()) {
             currentOptions = snapped;
         }
     }
 
-    private List<Integer> captureSnappedItems()
-    {
+    private List<Integer> captureSnappedItems() {
         List<Integer> snapped = new ArrayList<>();
-        synchronized (rollingColumns)
-        {
-            if (rollingColumns.isEmpty())
-            {
+        synchronized (rollingColumns) {
+            if (rollingColumns.isEmpty()) {
                 return snapped;
             }
             final int centerIndex = ICON_COUNT / 2;
             final int columns = Math.min(columnCount, rollingColumns.size());
-            for (int col = 0; col < columns; col++)
-            {
+            for (int col = 0; col < columns; col++) {
                 List<Integer> column = rollingColumns.get(col);
-                if (column.isEmpty())
-                {
+                if (column.isEmpty()) {
                     snapped.add(0);
                     continue;
                 }
                 final int winnerIndex = Math.min(centerIndex + winnerDelta, column.size() - 1);
-                if (winnerIndex >= 0 && winnerIndex < column.size())
-                {
+                if (winnerIndex >= 0 && winnerIndex < column.size()) {
                     snapped.add(column.get(winnerIndex));
-                }
-                else
-                {
+                } else {
                     snapped.add(0);
                 }
             }
@@ -309,14 +282,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     /**
      * Allows tests (or other non-DI contexts) to provide a config instance.
      */
-    public void setConfig(ChoicerConfig config)
-    {
+    public void setConfig(ChoicerConfig config) {
         this.config = config;
     }
 
     @Inject
-    public ChoicerOverlay(Client client, ItemManager itemManager)
-    {
+    public ChoicerOverlay(Client client, ItemManager itemManager) {
         this.client = client;
         this.itemManager = itemManager;
         setPosition(OverlayPosition.DYNAMIC);
@@ -333,8 +304,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     }
 
     @Override
-    public void startRollAnimation(int dummy, int rollDurationMs, Supplier<Integer> randomLockedItemSupplier)
-    {
+    public void startRollAnimation(int dummy, int rollDurationMs, Supplier<Integer> randomLockedItemSupplier) {
         setSelectionPending(false);
         resolveAnimating = false;
         resolveOptions = Collections.emptyList();
@@ -371,8 +341,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
         synchronized (rollingColumns) {
             rollingColumns.clear();
-            for (int c = 0; c < columnCount; c++)
-            {
+            for (int c = 0; c < columnCount; c++) {
                 List<Integer> column = new ArrayList<>();
                 for (int i = 0; i < DRAW_COUNT; i++) {
                     column.add(nextUniqueRollItem());
@@ -383,10 +352,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     }
 
     @Override
-    public int getFinalItem()
-    {
-        if (!currentOptions.isEmpty())
-        {
+    public int getFinalItem() {
+        if (!currentOptions.isEmpty()) {
             return currentOptions.get(0);
         }
         synchronized (rollingColumns) {
@@ -404,24 +371,21 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
     }
 
     @Override
-    public int getHighlightDurationMs()
-    {
+    public int getHighlightDurationMs() {
         return (int) HIGHLIGHT_DURATION_MS;
     }
 
     @Override
-    public void stopAnimation()
-    {
+    public void stopAnimation() {
         isAnimating = false;
     }
 
     @Override
-    public Dimension render(Graphics2D g)
-    {
+    public Dimension render(Graphics2D g) {
         if (!isAnimating && !selectionPending && !resolveAnimating) {
             return null;
         }
-        
+
         final Shape oldClip = g.getClip();
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -429,16 +393,14 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
 
         final long nowMs = System.currentTimeMillis();
-        if (resolveAnimating)
-        {
+        if (resolveAnimating) {
             return renderResolveAnimation(g, nowMs);
         }
         final long elapsed = nowMs - rollStartMs;
         final boolean clickableSelection = selectionPending && !currentOptions.isEmpty();
         final boolean highlightPhase = clickableSelection || (elapsed > rollDurationMs);
 
-        if (clickableSelection && currentOptions.size() < columnCount)
-        {
+        if (clickableSelection && currentOptions.size() < columnCount) {
             syncSelectionOptionsWithColumns();
         }
 
@@ -451,7 +413,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         float dt = 0f;
         if (lastUpdateNanos != 0L) {
             dt = (nowNanos - lastUpdateNanos) / 1_000_000_000f;
-            if (dt > MAX_DT) dt = MAX_DT;
+            if (dt > MAX_DT)
+                dt = MAX_DT;
         }
         lastUpdateNanos = nowNanos;
 
@@ -460,8 +423,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             final float eased = (float) Math.pow(1f - t, 3);
             currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * eased;
             int remainingMs = (int) (rollStartMs + rollDurationMs - nowMs);
-            if (remainingMs > 0 && remainingMs <= ANTICIPATION_WINDOW_MS)
-            {
+            if (remainingMs > 0 && remainingMs <= ANTICIPATION_WINDOW_MS) {
                 float factor = 0.6f + 0.4f * (remainingMs / (float) ANTICIPATION_WINDOW_MS);
                 currentSpeed *= factor;
             }
@@ -470,30 +432,38 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int vpX = client.getViewportXOffset();
         final int vpY = client.getViewportYOffset();
         final int vpWidth = client.getViewportWidth();
+        final int vpHeight = client.getViewportHeight();
         final int centerX = vpX + (vpWidth / 2);
 
-        final float slotScale = CHOICE_SLOT_SCALE;
+        final float layoutScale = getResponsiveLayoutScale(vpHeight);
+        final float slotScale = CHOICE_SLOT_SCALE * layoutScale;
         final int baseSlotWidth = ICON_W + SLOT_PADDING_X * 2;
         final int baseSlotHeight = ICON_H + SLOT_PADDING_Y * 2;
-        final int rollingVisibleItems = Math.max(2, clickableSelection ? VISIBLE_SELECTION_ITEM_COUNT : VISIBLE_ROLLING_ITEM_COUNT);
-        final float iconTargetSize = clickableSelection ? SCROLL_ICON_TARGET : SCROLL_ICON_TARGET_COMPACT;
+        final int rollingVisibleItems = Math.max(2,
+                clickableSelection ? VISIBLE_SELECTION_ITEM_COUNT : VISIBLE_ROLLING_ITEM_COUNT);
+        final float iconTargetSize = (clickableSelection ? SCROLL_ICON_TARGET : SCROLL_ICON_TARGET_COMPACT)
+                * layoutScale;
         final int rollingContentSpan = Math.round(
                 iconTargetSize * rollingVisibleItems
-                        + SCROLL_ITEM_GAP * (rollingVisibleItems - 1)
-        );
+                        + SCROLL_ITEM_GAP * (rollingVisibleItems - 1));
         final int minSlotWidth = clickableSelection ? MIN_CHOICE_SLOT_WIDTH : MIN_SCROLL_SLOT_WIDTH;
-        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), minSlotWidth);
-        final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), MIN_CHOICE_SLOT_HEIGHT);
+        final int scaledMinSlotWidth = scaleLayoutValue(minSlotWidth, layoutScale, baseSlotWidth);
+        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), scaledMinSlotWidth);
+        final int scaledMinSlotHeight = scaleLayoutValue(MIN_CHOICE_SLOT_HEIGHT, layoutScale, baseSlotHeight);
+        final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), scaledMinSlotHeight);
         final int slotHeight = Math.max(scaledSlotHeight, rollingContentSpan + SLOT_PADDING_Y * 2);
-        final int spacing = Math.max(14, Math.round(COLUMN_SPACING * slotScale));
+        final int spacing = Math.max(scaleLayoutValue(14, layoutScale, 10), Math.round(COLUMN_SPACING * slotScale));
         final int totalWidth = columnCount * slotWidth + (columnCount - 1) * spacing;
-        final int slotsLeftX = centerX - ( totalWidth / 2 );
-        final int slotTopY = vpY + SELECTION_TOP_MARGIN + (clickableSelection ? CHOICE_BUTTON_Y_OFFSET : 0);
+        final int slotsLeftX = centerX - (totalWidth / 2);
+        final int selectionTopMargin = scaleLayoutValue(SELECTION_TOP_MARGIN, layoutScale, 8);
+        final int choiceButtonYOffset = scaleLayoutValue(CHOICE_BUTTON_Y_OFFSET, layoutScale, 6);
+        final int slotTopY = vpY + selectionTopMargin + (clickableSelection ? choiceButtonYOffset : 0);
 
         final float middleIndex = (ICON_COUNT - 1) / 2f;
         final float scrollGap = SCROLL_ITEM_GAP;
         final float maxIconWidth = slotWidth - SLOT_PADDING_X * 2f;
-        final float maxIconHeight = (slotHeight - SLOT_PADDING_Y * 2f - (rollingVisibleItems - 1) * scrollGap) / rollingVisibleItems;
+        final float maxIconHeight = (slotHeight - SLOT_PADDING_Y * 2f - (rollingVisibleItems - 1) * scrollGap)
+                / rollingVisibleItems;
         final float rollingIconSize = Math.max(ICON_W, Math.min(maxIconWidth, maxIconHeight));
         final int iconSize = Math.max(1, Math.round(rollingIconSize));
         final float activeStep = iconSize + scrollGap;
@@ -503,8 +473,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final float contentCenterY = slotTopY + iconPadY + rollingContentHeight / 2f;
         final float iconsTopYF = contentCenterY - middleIndex * activeStep - iconSize / 2f;
         final int[] columnXs = new int[columnCount];
-        for (int col = 0; col < columnCount; col++)
-        {
+        for (int col = 0; col < columnCount; col++) {
             columnXs[col] = slotsLeftX + col * (slotWidth + spacing);
         }
 
@@ -514,34 +483,24 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int innerBoxW = iconSize - innerBoxXInset * 2;
         final int innerBoxH = iconSize - innerBoxYInset * 2;
 
-        if (!clickableSelection)
-        {
-            for (int col = 0; col < columnCount; col++)
-            {
+        if (!clickableSelection) {
+            for (int col = 0; col < columnCount; col++) {
                 drawSlotWindow(g, columnXs[col], slotTopY, slotWidth, slotHeight, slotScale);
             }
 
-            for (int col = 0; col < columnCount; col++)
-            {
+            for (int col = 0; col < columnCount; col++) {
                 float adjust = columnOffsetAdjust[col];
-                if (!highlightPhase && !isSnapping)
-                {
+                if (!highlightPhase && !isSnapping) {
                     adjust += (columnSpeedScale[col] - 1f) * currentSpeed * dt;
                     adjust = normalizeStep(adjust, activeStep);
-                }
-                else if (isSnapping)
-                {
+                } else if (isSnapping) {
                     adjust *= 0.82f;
-                    if (Math.abs(adjust) < 0.01f)
-                    {
+                    if (Math.abs(adjust) < 0.01f) {
                         adjust = 0f;
                     }
-                }
-                else if (highlightPhase)
-                {
+                } else if (highlightPhase) {
                     adjust *= 0.9f;
-                    if (Math.abs(adjust) < 0.01f)
-                    {
+                    if (Math.abs(adjust) < 0.01f) {
                         adjust = 0f;
                     }
                 }
@@ -550,13 +509,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
             g.setClip(slotsLeftX, slotTopY, totalWidth, slotHeight);
 
-            synchronized (columnHitboxes)
-            {
+            synchronized (columnHitboxes) {
                 columnHitboxes.clear();
             }
 
-            synchronized (rollingColumns)
-            {
+            synchronized (rollingColumns) {
                 if (!highlightPhase && !isSnapping && (rollStartMs + rollDurationMs - nowMs) <= SNAP_DURATION_MS) {
                     isSnapping = true;
                     snapStartMs = nowMs;
@@ -567,6 +524,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     final boolean goNext = (snapResidualStart / activeStep) >= SNAP_NEXT_THRESHOLD;
                     winnerDelta = goNext ? 1 : 0;
                     snapTarget = goNext ? (snapBase + activeStep) : snapBase;
+                    if (snapTarget < rollOffset) {
+                        snapTarget += activeStep;
+                        winnerDelta = 1;
+                    }
                 }
 
                 if (!highlightPhase) {
@@ -577,9 +538,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         final float end = snapTarget;
                         rollOffset = start + (end - start) * s;
 
-                        if (rollOffset >= activeStep) {
-                            normalizeOnce(activeStep);
-                            winnerDelta = 0;
+                        if (u >= 1f) {
+                            rollOffset = end;
+                            if (rollOffset >= activeStep) {
+                                normalizeOnce(activeStep);
+                                winnerDelta = 0;
+                            }
+                            isSnapping = false;
                             snapBase = 0f;
                             snapTarget = 0f;
                             snapResidualStart = 0f;
@@ -596,17 +561,22 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         normalizeOnce(activeStep);
                         winnerDelta = 0;
                     }
+                    isSnapping = false;
+                    snapBase = 0f;
+                    snapTarget = 0f;
+                    snapResidualStart = 0f;
                 }
 
-                for (int col = 0; col < columnCount; col++)
-                {
-                    List<Integer> column = col < rollingColumns.size() ? rollingColumns.get(col) : Collections.emptyList();
+                for (int col = 0; col < columnCount; col++) {
+                    List<Integer> column = col < rollingColumns.size() ? rollingColumns.get(col)
+                            : Collections.emptyList();
                     final int iconsX = columnXs[col] + iconPadX;
                     final int itemsToDraw = Math.min(column.size(), DRAW_COUNT);
                     for (int i = 0; i < itemsToDraw; i++) {
                         final int itemId = column.get(i);
                         final BufferedImage image = itemManager.getImage(itemId, 1, false);
-                        if (image == null) continue;
+                        if (image == null)
+                            continue;
 
                         final float columnOffset = rollOffset + columnOffsetAdjust[col];
                         final float drawYF = iconsTopYF + i * activeStep - columnOffset;
@@ -614,9 +584,9 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
                         Object oldInterpolation = g.getRenderingHint(RenderingHints.KEY_INTERPOLATION);
                         Object oldAntialias = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
-                        if (highlightPhase)
-                        {
-                            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+                        if (highlightPhase) {
+                            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                                    RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
                             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
                         }
                         drawIconFrame(g, iconsX, drawY, iconSize);
@@ -629,12 +599,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 }
 
                 if (highlightPhase) {
-                    for (int col = 0; col < columnCount; col++)
-                    {
-                        List<Integer> column = col < rollingColumns.size() ? rollingColumns.get(col) : Collections.emptyList();
+                    for (int col = 0; col < columnCount; col++) {
+                        List<Integer> column = col < rollingColumns.size() ? rollingColumns.get(col)
+                                : Collections.emptyList();
                         final int winnerIndex = Math.min(centerIndex + winnerDelta, column.size() - 1);
-                        if (winnerIndex < 0 || winnerIndex >= column.size())
-                        {
+                        if (winnerIndex < 0 || winnerIndex >= column.size()) {
                             continue;
                         }
 
@@ -644,8 +613,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                         final int columnBaseY = Math.round(columnBaseF);
                         drawHighlight(g, columnXs[col] + iconPadX, columnBaseY, centerItemId, iconSize, false);
                         float impactAlpha = getImpactAlpha(nowMs);
-                        if (impactAlpha > 0f)
-                        {
+                        if (impactAlpha > 0f) {
                             drawImpactFlash(g, columnXs[col] + iconPadX, columnBaseY, iconSize, impactAlpha);
                         }
                         if (clickableSelection && col < currentOptions.size()) {
@@ -659,39 +627,32 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     }
                 }
             }
-        }
-        else
-        {
-            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX);
+        } else {
+            renderSelectionButtons(g, columnXs, slotTopY, slotWidth, slotHeight, iconSize, iconPadX, layoutScale);
         }
 
         g.setClip(oldClip);
 
-        if (!clickableSelection)
-        {
+        if (!clickableSelection) {
             final int centerSlotY = Math.round(iconsTopYF + centerIndex * activeStep);
-            for (int col = 0; col < columnCount; col++)
-            {
+            for (int col = 0; col < columnCount; col++) {
                 int iconX = columnXs[col] + iconPadX;
                 float alpha = highlightPhase ? 0.65f : 0.45f;
                 drawCenterMarker(g, iconX, centerSlotY, iconSize, alpha);
             }
         }
 
-        if (clickableSelection)
-        {
+        if (clickableSelection) {
             return new Dimension(totalWidth, slotHeight);
         }
         return null;
     }
 
-    private Dimension renderResolveAnimation(Graphics2D g, long nowMs)
-    {
+    private Dimension renderResolveAnimation(Graphics2D g, long nowMs) {
         List<Integer> optionsSnapshot = resolveOptions == null
                 ? Collections.emptyList()
                 : new ArrayList<>(resolveOptions);
-        if (optionsSnapshot.isEmpty() || resolveSelectedIndex < 0)
-        {
+        if (optionsSnapshot.isEmpty() || resolveSelectedIndex < 0) {
             resolveAnimating = false;
             isAnimating = false;
             return null;
@@ -699,8 +660,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         int selectedIndex = Math.min(Math.max(resolveSelectedIndex, 0), optionsSnapshot.size() - 1);
         long elapsed = nowMs - resolveStartMs;
         long total = RESOLVE_DURATION_MS + RESOLVE_HOLD_MS;
-        if (elapsed >= total)
-        {
+        if (elapsed >= total) {
             resolveAnimating = false;
             isAnimating = false;
             return null;
@@ -715,44 +675,50 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int vpWidth = client.getViewportWidth();
         final int vpHeight = client.getViewportHeight();
         final int centerX = vpX + (vpWidth / 2);
+        final float layoutScale = getResponsiveLayoutScale(vpHeight);
+        final float slotScale = CHOICE_SLOT_SCALE * layoutScale;
 
         final int localColumnCount = Math.max(2, Math.min(5, optionsSnapshot.size()));
         final int baseSlotWidth = ICON_W + SLOT_PADDING_X * 2;
         final int baseSlotHeight = ICON_H + SLOT_PADDING_Y * 2;
         final int rollingVisibleItems = Math.max(2, VISIBLE_SELECTION_ITEM_COUNT);
-        final float iconTargetSize = SCROLL_ICON_TARGET;
+        final float iconTargetSize = SCROLL_ICON_TARGET * layoutScale;
         final int rollingContentSpan = Math.round(
                 iconTargetSize * rollingVisibleItems
-                        + SCROLL_ITEM_GAP * (rollingVisibleItems - 1)
-        );
-        final int slotWidth = Math.max(baseSlotWidth, MIN_CHOICE_SLOT_WIDTH);
-        final int scaledSlotHeight = Math.max(baseSlotHeight, MIN_CHOICE_SLOT_HEIGHT);
+                        + SCROLL_ITEM_GAP * (rollingVisibleItems - 1));
+        final int scaledMinSlotWidth = scaleLayoutValue(MIN_CHOICE_SLOT_WIDTH, layoutScale, baseSlotWidth);
+        final int slotWidth = Math.max(Math.round(baseSlotWidth * slotScale), scaledMinSlotWidth);
+        final int scaledMinSlotHeight = scaleLayoutValue(MIN_CHOICE_SLOT_HEIGHT, layoutScale, baseSlotHeight);
+        final int scaledSlotHeight = Math.max(Math.round(baseSlotHeight * slotScale), scaledMinSlotHeight);
         final int slotHeight = Math.max(scaledSlotHeight, rollingContentSpan + SLOT_PADDING_Y * 2);
-        final int spacing = Math.max(14, COLUMN_SPACING);
+        final int spacing = Math.max(scaleLayoutValue(14, layoutScale, 10), Math.round(COLUMN_SPACING * slotScale));
         final int totalWidth = localColumnCount * slotWidth + (localColumnCount - 1) * spacing;
-        final int slotsLeftX = centerX - ( totalWidth / 2 );
-        final int slotTopY = vpY + SELECTION_TOP_MARGIN + CHOICE_BUTTON_Y_OFFSET;
+        final int slotsLeftX = centerX - (totalWidth / 2);
+        final int selectionTopMargin = scaleLayoutValue(SELECTION_TOP_MARGIN, layoutScale, 8);
+        final int choiceButtonYOffset = scaleLayoutValue(CHOICE_BUTTON_Y_OFFSET, layoutScale, 6);
+        final int slotTopY = vpY + selectionTopMargin + choiceButtonYOffset;
 
         final float scrollGap = SCROLL_ITEM_GAP;
         final float maxIconWidth = slotWidth - SLOT_PADDING_X * 2f;
-        final float maxIconHeight = (slotHeight - SLOT_PADDING_Y * 2f - (rollingVisibleItems - 1) * scrollGap) / rollingVisibleItems;
+        final float maxIconHeight = (slotHeight - SLOT_PADDING_Y * 2f - (rollingVisibleItems - 1) * scrollGap)
+                / rollingVisibleItems;
         final float rollingIconSize = Math.max(ICON_W, Math.min(maxIconWidth, maxIconHeight));
         final int iconSize = Math.max(1, Math.round(rollingIconSize));
         final int iconPadX = Math.max(SLOT_PADDING_X, (slotWidth - iconSize) / 2);
         final int[] columnXs = new int[localColumnCount];
-        for (int col = 0; col < localColumnCount; col++)
-        {
+        for (int col = 0; col < localColumnCount; col++) {
             columnXs[col] = slotsLeftX + col * (slotWidth + spacing);
         }
 
         List<Rectangle> buttonRects = new ArrayList<>(localColumnCount);
         List<Rectangle> iconRects = new ArrayList<>(localColumnCount);
-        final int insetX = CHOICE_BUTTON_INSET;
-        final int insetY = CHOICE_BUTTON_INSET;
+        final int insetX = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int insetY = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int iconTopPadding = scaleLayoutValue(CHOICE_ICON_TOP_PADDING, layoutScale, 4);
+        final int labelReservedHeight = scaleLayoutValue(CHOICE_LABEL_RESERVED_HEIGHT, layoutScale, 20);
         final int slotBottom = slotTopY + slotHeight - insetY;
         final int baseIconSize = iconSize;
-        for (int i = 0; i < localColumnCount; i++)
-        {
+        for (int i = 0; i < localColumnCount; i++) {
             final int buttonTop = slotTopY + insetY;
             final int buttonBottom = slotBottom;
             int x = columnXs[i] + insetX;
@@ -761,11 +727,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             int height = Math.max(1, buttonBottom - buttonTop);
             buttonRects.add(new Rectangle(x, y, width, height));
 
-            int iconAreaTop = buttonTop + CHOICE_ICON_TOP_PADDING;
-            int iconAreaBottom = buttonBottom - CHOICE_LABEL_RESERVED_HEIGHT;
-            if (iconAreaBottom <= iconAreaTop + 4)
-            {
-                iconAreaBottom = buttonBottom - 6;
+            int iconAreaTop = buttonTop + iconTopPadding;
+            int iconAreaBottom = buttonBottom - labelReservedHeight;
+            if (iconAreaBottom <= iconAreaTop + 4) {
+                iconAreaBottom = buttonBottom - scaleLayoutValue(6, layoutScale, 4);
             }
             int iconAreaHeight = Math.max(1, iconAreaBottom - iconAreaTop);
             int choiceIconSize = Math.max(ICON_W, Math.min(baseIconSize, iconAreaHeight));
@@ -775,14 +740,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             iconRects.add(new Rectangle(iconX, iconY, choiceIconSize, choiceIconSize));
         }
 
-        synchronized (columnHitboxes)
-        {
+        synchronized (columnHitboxes) {
             columnHitboxes.clear();
         }
 
         final float targetCx = vpX + vpWidth / 2f;
-        for (int i = 0; i < optionsSnapshot.size() && i < buttonRects.size(); i++)
-        {
+        for (int i = 0; i < optionsSnapshot.size() && i < buttonRects.size(); i++) {
             Rectangle baseRect = buttonRects.get(i);
             Rectangle baseIcon = iconRects.get(i);
             float rectCx = baseRect.x + baseRect.width / 2f;
@@ -800,18 +763,14 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             float intensity = 0.75f;
             float dimAlpha = 0f;
 
-            if (i == selectedIndex && optionsSnapshot.get(i) == resolveSelectedItemId)
-            {
+            if (i == selectedIndex && optionsSnapshot.get(i) == resolveSelectedItemId) {
                 drawCx = lerp(rectCx, targetCx, selectT);
                 drawCy = rectCy;
                 scale = lerp(1f, RESOLVE_SELECTED_SCALE, selectT);
                 hovered = true;
                 intensity = 0.95f;
-            }
-            else
-            {
-                if (holdPhase)
-                {
+            } else {
+                if (holdPhase) {
                     continue;
                 }
                 float drop = (vpHeight * RESOLVE_FALL_DISTANCE + baseRect.height) * fallT;
@@ -832,12 +791,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     baseIcon,
                     scale,
                     drawCx + iconOffsetX * scale,
-                    drawCy + iconOffsetY * scale
-            );
+                    drawCy + iconOffsetY * scale);
 
             Composite oldComposite = g.getComposite();
-            if (alpha < 1f)
-            {
+            if (alpha < 1f) {
                 g.setComposite(AlphaComposite.SrcOver.derive(alpha));
             }
             drawChoiceButton(g, drawRect, drawIcon, optionsSnapshot.get(i), hovered, true, intensity, dimAlpha);
@@ -847,26 +804,22 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         return new Dimension(totalWidth, slotHeight);
     }
 
-    private float easeOutCubic(float t)
-    {
+    private float easeOutCubic(float t) {
         float clamped = Math.max(0f, Math.min(1f, t));
         float inv = 1f - clamped;
         return 1f - inv * inv * inv;
     }
 
-    private float easeInCubic(float t)
-    {
+    private float easeInCubic(float t) {
         float clamped = Math.max(0f, Math.min(1f, t));
         return clamped * clamped * clamped;
     }
 
-    private float lerp(float a, float b, float t)
-    {
+    private float lerp(float a, float b, float t) {
         return a + (b - a) * t;
     }
 
-    private Rectangle scaleRect(Rectangle base, float scale, float centerX, float centerY)
-    {
+    private Rectangle scaleRect(Rectangle base, float scale, float centerX, float centerY) {
         int w = Math.max(1, Math.round(base.width * scale));
         int h = Math.max(1, Math.round(base.height * scale));
         int x = Math.round(centerX - w / 2f);
@@ -881,17 +834,15 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             int slotWidth,
             int slotHeight,
             int iconSize,
-            int iconPadX)
-    {
+            int iconPadX,
+            float layoutScale) {
         List<Integer> optionsSnapshot = currentOptions == null
                 ? Collections.emptyList()
                 : new ArrayList<>(currentOptions);
         final int availableSlots = columnXs == null ? 0 : columnXs.length;
         final int drawCount = Math.min(optionsSnapshot.size(), availableSlots);
-        if (drawCount <= 0)
-        {
-            synchronized (columnHitboxes)
-            {
+        if (drawCount <= 0) {
+            synchronized (columnHitboxes) {
                 columnHitboxes.clear();
             }
             return;
@@ -900,12 +851,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         List<Rectangle> buttonRects = new ArrayList<>(drawCount);
         List<Rectangle> hitboxRects = new ArrayList<>(drawCount);
         List<Rectangle> iconRects = new ArrayList<>(drawCount);
-        final int insetX = CHOICE_BUTTON_INSET;
-        final int insetY = CHOICE_BUTTON_INSET;
+        final int insetX = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int insetY = scaleLayoutValue(CHOICE_BUTTON_INSET, layoutScale, 4);
+        final int iconTopPadding = scaleLayoutValue(CHOICE_ICON_TOP_PADDING, layoutScale, 4);
+        final int labelReservedHeight = scaleLayoutValue(CHOICE_LABEL_RESERVED_HEIGHT, layoutScale, 20);
         final int slotBottom = topY + slotHeight - insetY;
         final int baseIconSize = iconSize;
-        for (int i = 0; i < drawCount; i++)
-        {
+        for (int i = 0; i < drawCount; i++) {
             final int buttonTop = topY + insetY;
             final int buttonBottom = slotBottom;
             int x = columnXs[i] + insetX;
@@ -916,11 +868,10 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             Rectangle drawRect = new Rectangle(x, y, width, height);
             buttonRects.add(drawRect);
 
-            int iconAreaTop = buttonTop + CHOICE_ICON_TOP_PADDING;
-            int iconAreaBottom = buttonBottom - CHOICE_LABEL_RESERVED_HEIGHT;
-            if (iconAreaBottom <= iconAreaTop + 4)
-            {
-                iconAreaBottom = buttonBottom - 6;
+            int iconAreaTop = buttonTop + iconTopPadding;
+            int iconAreaBottom = buttonBottom - labelReservedHeight;
+            if (iconAreaBottom <= iconAreaTop + 4) {
+                iconAreaBottom = buttonBottom - scaleLayoutValue(6, layoutScale, 4);
             }
             int iconAreaHeight = Math.max(1, iconAreaBottom - iconAreaTop);
             int choiceIconSize = Math.max(ICON_W, Math.min(baseIconSize, iconAreaHeight));
@@ -935,21 +886,17 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
         Point mouse = client.getMouseCanvasPosition();
         int hoveredIndex = -1;
-        if (mouse != null)
-        {
-            for (int i = 0; i < buttonRects.size(); i++)
-            {
+        if (mouse != null) {
+            for (int i = 0; i < buttonRects.size(); i++) {
                 Rectangle rect = buttonRects.get(i);
-                if (rect.contains(new java.awt.Point(mouse.getX(), mouse.getY())))
-                {
+                if (rect.contains(new java.awt.Point(mouse.getX(), mouse.getY()))) {
                     hoveredIndex = i;
                     break;
                 }
             }
         }
 
-        synchronized (columnHitboxes)
-        {
+        synchronized (columnHitboxes) {
             columnHitboxes.clear();
             columnHitboxes.addAll(hitboxRects);
         }
@@ -957,8 +904,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final long nowMs = System.currentTimeMillis();
         final float revealPulse = getSelectionPulseAlpha(nowMs);
 
-        for (int i = 0; i < drawCount; i++)
-        {
+        for (int i = 0; i < drawCount; i++) {
             boolean hovered = (i == hoveredIndex);
             boolean animate = selectionPending || hovered;
             float intensity = hovered ? 1.0f : 0.55f + revealPulse;
@@ -971,8 +917,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                     hovered,
                     animate,
                     intensity,
-                    dimAlpha
-            );
+                    dimAlpha);
         }
     }
 
@@ -984,8 +929,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
             boolean hovered,
             boolean animate,
             float intensity,
-            float dimAlpha)
-    {
+            float dimAlpha) {
         Paint previousPaint = g.getPaint();
         Stroke previousStroke = g.getStroke();
         Composite previousComposite = g.getComposite();
@@ -994,15 +938,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 rect.x,
                 rect.y,
                 rect.width,
-                rect.height
-        );
+                rect.height);
 
         Rectangle2D.Float shadowShape = new Rectangle2D.Float(
                 rect.x + 1,
                 rect.y + 3,
                 rect.width,
-                rect.height
-        );
+                rect.height);
         g.setColor(CHOICE_BUTTON_SHADOW);
         g.fill(shadowShape);
 
@@ -1018,8 +960,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 top,
                 rect.x,
                 rect.y + rect.height,
-                bottom
-        );
+                bottom);
         g.setPaint(paint);
         g.fill(buttonShape);
 
@@ -1038,33 +979,32 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setComposite(AlphaComposite.SrcOver.derive(0.6f));
         g.setStroke(new BasicStroke(4.2f));
         g.setColor(CORNER_SHADOW);
-        drawRectBracket(g, rect.x - bracketPad, rect.y - bracketPad, rect.width + bracketPad * 2, rect.height + bracketPad * 2, corner + bracketPad);
+        drawRectBracket(g, rect.x - bracketPad, rect.y - bracketPad, rect.width + bracketPad * 2,
+                rect.height + bracketPad * 2, corner + bracketPad);
         g.setComposite(AlphaComposite.SrcOver.derive(0.9f));
         g.setStroke(new BasicStroke(3.2f));
         g.setColor(CORNER_HIGHLIGHT);
-        drawRectBracket(g, rect.x - bracketPad, rect.y - bracketPad, rect.width + bracketPad * 2, rect.height + bracketPad * 2, corner + bracketPad);
+        drawRectBracket(g, rect.x - bracketPad, rect.y - bracketPad, rect.width + bracketPad * 2,
+                rect.height + bracketPad * 2, corner + bracketPad);
         g.setComposite(oldComposite);
 
-        if (animate)
-        {
+        if (animate) {
             drawPulse(g, buttonShape, rect, intensity);
         }
-        if (hovered)
-        {
+        if (hovered) {
             drawShimmer(g, buttonShape, rect, intensity);
         }
 
-        if (dimAlpha > 0f)
-{
-    Composite dimOldComposite = g.getComposite();
-    Shape oldClip = g.getClip();
-    g.setClip(buttonShape);
-    g.setComposite(AlphaComposite.SrcOver.derive(Math.min(0.35f, dimAlpha)));
-    g.setColor(new Color(0, 0, 0, 220));
-    g.fillRect(rect.x, rect.y, rect.width, rect.height);
-    g.setClip(oldClip);
-    g.setComposite(dimOldComposite);
-}
+        if (dimAlpha > 0f) {
+            Composite dimOldComposite = g.getComposite();
+            Shape oldClip = g.getClip();
+            g.setClip(buttonShape);
+            g.setComposite(AlphaComposite.SrcOver.derive(Math.min(0.35f, dimAlpha)));
+            g.setColor(new Color(0, 0, 0, 220));
+            g.fillRect(rect.x, rect.y, rect.width, rect.height);
+            g.setClip(oldClip);
+            g.setComposite(dimOldComposite);
+        }
 
         g.setColor(hovered ? CHOICE_BUTTON_BORDER_HOVER : CHOICE_BUTTON_BORDER);
         g.setStroke(new BasicStroke(hovered ? 3f : 2f));
@@ -1078,8 +1018,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final int iconX = iconRect.x;
         final int iconY = iconRect.y;
         BufferedImage icon = itemManager.getImage(itemId, 1, false);
-        if (icon != null)
-        {
+        if (icon != null) {
             Object oldInterpolation = g.getRenderingHint(RenderingHints.KEY_INTERPOLATION);
             Object oldAntialias = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING);
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
@@ -1094,10 +1033,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
     }
 
-    private void drawMarkerBadge(Graphics2D g, Rectangle buttonRect, int itemId)
-    {
-        if (config == null || !config.includeUntradeable())
-        {
+    private void drawMarkerBadge(Graphics2D g, Rectangle buttonRect, int itemId) {
+        if (config == null || !config.includeUntradeable()) {
             return;
         }
         boolean tradeable = isTradeableItem(itemId);
@@ -1109,60 +1046,46 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         Composite oldComposite = g.getComposite();
         g.setComposite(AlphaComposite.SrcOver.derive(0.85f));
         g.setColor(new Color(0, 0, 0, 130));
-        if (tradeable)
-        {
+        if (tradeable) {
             g.fillOval(x + 1, y + 1, size, size);
-        }
-        else
-        {
+        } else {
             Polygon shadow = new Polygon(
-                    new int[]{x + size / 2 + 1, x + size + 1, x + size / 2 + 1, x + 1},
-                    new int[]{y + 1, y + size / 2 + 1, y + size + 1, y + size / 2 + 1},
-                    4
-            );
+                    new int[] { x + size / 2 + 1, x + size + 1, x + size / 2 + 1, x + 1 },
+                    new int[] { y + 1, y + size / 2 + 1, y + size + 1, y + size / 2 + 1 },
+                    4);
             g.fillPolygon(shadow);
         }
 
         g.setComposite(AlphaComposite.SrcOver.derive(0.95f));
         Color accent = tradeable ? TRADEABLE_GLOW_INNER : UNTRADEABLE_GLOW_INNER;
         g.setColor(accent);
-        if (tradeable)
-        {
+        if (tradeable) {
             g.fillOval(x, y, size, size);
-        }
-        else
-        {
+        } else {
             Polygon diamond = new Polygon(
-                    new int[]{x + size / 2, x + size, x + size / 2, x},
-                    new int[]{y, y + size / 2, y + size, y + size / 2},
-                    4
-            );
+                    new int[] { x + size / 2, x + size, x + size / 2, x },
+                    new int[] { y, y + size / 2, y + size, y + size / 2 },
+                    4);
             g.fillPolygon(diamond);
         }
 
         g.setComposite(AlphaComposite.SrcOver.derive(0.9f));
         g.setColor(new Color(0, 0, 0, 110));
-        if (tradeable)
-        {
+        if (tradeable) {
             g.drawOval(x, y, size, size);
-        }
-        else
-        {
+        } else {
             Polygon outline = new Polygon(
-                    new int[]{x + size / 2, x + size, x + size / 2, x},
-                    new int[]{y, y + size / 2, y + size, y + size / 2},
-                    4
-            );
+                    new int[] { x + size / 2, x + size, x + size / 2, x },
+                    new int[] { y, y + size / 2, y + size, y + size / 2 },
+                    4);
             g.drawPolygon(outline);
         }
         g.setComposite(oldComposite);
     }
 
-    private void drawPulse(Graphics2D g, Shape clipShape, Rectangle rect, float intensity)
-    {
+    private void drawPulse(Graphics2D g, Shape clipShape, Rectangle rect, float intensity) {
         float alpha = getPulseAlpha() * Math.max(0.2f, Math.min(1f, intensity));
-        if (alpha <= 0f)
-        {
+        if (alpha <= 0f) {
             return;
         }
         Composite oldComposite = g.getComposite();
@@ -1177,18 +1100,15 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 rect.x + 1,
                 rect.y + 1,
                 rect.width - 2,
-                rect.height - 2
-        ));
+                rect.height - 2));
         g.setClip(oldClip);
         g.setComposite(oldComposite);
         g.setStroke(oldStroke);
     }
 
-    private void drawShimmer(Graphics2D g, Shape clipShape, Rectangle rect, float intensity)
-    {
+    private void drawShimmer(Graphics2D g, Shape clipShape, Rectangle rect, float intensity) {
         float alpha = SHIMMER_ALPHA * Math.max(0.2f, Math.min(1f, intensity));
-        if (alpha <= 0f)
-        {
+        if (alpha <= 0f) {
             return;
         }
         long now = System.nanoTime();
@@ -1203,13 +1123,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         LinearGradientPaint shimmerPaint = new LinearGradientPaint(
                 p1,
                 p2,
-                new float[]{0f, 0.5f, 1f},
-                new Color[]{
+                new float[] { 0f, 0.5f, 1f },
+                new Color[] {
                         new Color(230, 210, 150, 0),
                         new Color(230, 210, 150, 180),
                         new Color(230, 210, 150, 0)
-                }
-        );
+                });
 
         Composite oldComposite = g.getComposite();
         Shape oldClip = g.getClip();
@@ -1221,15 +1140,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setComposite(oldComposite);
     }
 
-    private float getSelectionPulseAlpha(long nowMs)
-    {
-        if (!selectionPending || selectionStartMs <= 0L)
-        {
+    private float getSelectionPulseAlpha(long nowMs) {
+        if (!selectionPending || selectionStartMs <= 0L) {
             return 0f;
         }
         long elapsed = nowMs - selectionStartMs;
-        if (elapsed < 0 || elapsed > SELECTION_REVEAL_MS)
-        {
+        if (elapsed < 0 || elapsed > SELECTION_REVEAL_MS) {
             return 0f;
         }
         float t = elapsed / (float) SELECTION_REVEAL_MS;
@@ -1237,16 +1153,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         return 0.18f * (1f - t) * wave;
     }
 
-    private float getImpactAlpha(long nowMs)
-    {
-        if (rollDurationMs <= 0)
-        {
+    private float getImpactAlpha(long nowMs) {
+        if (rollDurationMs <= 0) {
             return 0f;
         }
         long impactStart = rollStartMs + rollDurationMs;
         long elapsed = nowMs - impactStart;
-        if (elapsed < 0 || elapsed > IMPACT_FLASH_MS)
-        {
+        if (elapsed < 0 || elapsed > IMPACT_FLASH_MS) {
             return 0f;
         }
         float t = elapsed / (float) IMPACT_FLASH_MS;
@@ -1254,10 +1167,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         return 0.35f * easeOut;
     }
 
-    private void drawImpactFlash(Graphics2D g, int x, int y, int size, float alpha)
-    {
-        if (alpha <= 0f)
-        {
+    private void drawImpactFlash(Graphics2D g, int x, int y, int size, float alpha) {
+        if (alpha <= 0f) {
             return;
         }
         float radius = size * 0.9f;
@@ -1266,13 +1177,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         RadialGradientPaint glow = new RadialGradientPaint(
                 new Point2D.Float(cx, cy),
                 radius,
-                new float[]{0f, 0.6f, 1f},
-                new Color[]{
+                new float[] { 0f, 0.6f, 1f },
+                new Color[] {
                         new Color(255, 235, 170, Math.round(180 * alpha)),
                         new Color(255, 210, 120, Math.round(120 * alpha)),
                         new Color(255, 200, 90, 0)
-                }
-        );
+                });
         Composite oldComposite = g.getComposite();
         g.setComposite(AlphaComposite.SrcOver.derive(Math.min(1f, alpha)));
         Paint oldPaint = g.getPaint();
@@ -1282,21 +1192,18 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setComposite(oldComposite);
     }
 
-    private void drawIconFrame(Graphics2D g, int x, int y, int size)
-    {
+    private void drawIconFrame(Graphics2D g, int x, int y, int size) {
         Paint oldPaint = g.getPaint();
         g.setPaint(new LinearGradientPaint(
                 new Point2D.Float(x, y),
                 new Point2D.Float(x, y + size),
-                new float[]{0f, 1f},
-                new Color[]{SLOT_FILL_TOP, SLOT_FILL_BOTTOM}
-        ));
+                new float[] { 0f, 1f },
+                new Color[] { SLOT_FILL_TOP, SLOT_FILL_BOTTOM }));
         g.fillRect(x, y, size, size);
 
         g.setColor(SLOT_BORDER);
         g.drawRect(x, y, size - 1, size - 1);
-        if (size > 4)
-        {
+        if (size > 4) {
             g.setColor(new Color(20, 16, 10, 170));
             g.drawRect(x + 1, y + 1, size - 3, size - 3);
             g.setColor(new Color(220, 188, 135, 70));
@@ -1305,8 +1212,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setPaint(oldPaint);
     }
 
-    private void drawCenterMarker(Graphics2D g, int iconX, int iconY, int iconSize, float alpha)
-    {
+    private void drawCenterMarker(Graphics2D g, int iconX, int iconY, int iconSize, float alpha) {
         int pad = Math.max(3, Math.round(iconSize * 0.12f));
         int x = iconX - pad;
         int w = iconSize + pad * 2;
@@ -1330,8 +1236,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setComposite(oldComposite);
     }
 
-    private void drawRectBracket(Graphics2D g, int x, int y, int w, int h, int corner)
-    {
+    private void drawRectBracket(Graphics2D g, int x, int y, int w, int h, int corner) {
         // top-left
         g.drawLine(x, y, x + corner, y);
         g.drawLine(x, y, x, y + corner);
@@ -1346,16 +1251,14 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.drawLine(x + w, y + h - corner, x + w, y + h);
     }
 
-    private float getPulseAlpha()
-    {
+    private float getPulseAlpha() {
         long now = System.nanoTime();
         float phase = (now % PULSE_PERIOD_NS) / (float) PULSE_PERIOD_NS;
         float wave = 0.5f + 0.5f * (float) Math.sin(phase * Math.PI * 2.0);
         return PULSE_MIN_ALPHA + (PULSE_MAX_ALPHA - PULSE_MIN_ALPHA) * wave;
     }
 
-    private Color blendColors(Color base, Color accent, float mix)
-    {
+    private Color blendColors(Color base, Color accent, float mix) {
         mix = Math.max(0f, Math.min(1f, mix));
         final float inv = 1f - mix;
         int r = Math.round(base.getRed() * inv + accent.getRed() * mix);
@@ -1369,8 +1272,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         return new Color(r, g, b, a);
     }
 
-    private void drawIconGlow(Graphics2D g, Rectangle iconRect, int itemId, boolean hovered)
-    {
+    private void drawIconGlow(Graphics2D g, Rectangle iconRect, int itemId, boolean hovered) {
         Color[] palette = getHighlightPalette(itemId);
         Color accent = palette[0];
         float alpha = hovered ? 0.85f : 0.6f;
@@ -1385,8 +1287,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 iconRect.width + 2,
                 iconRect.height + 2,
                 6,
-                6
-        );
+                6);
         boolean tradeable = isTradeableItem(itemId);
         int badge = Math.max(6, Math.round(iconRect.width * 0.22f));
         int badgeX = iconRect.x + iconRect.width - badge - 2;
@@ -1394,58 +1295,45 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
 
         g.setComposite(AlphaComposite.SrcOver.derive(0.8f));
         g.setColor(new Color(0, 0, 0, 120));
-        if (tradeable)
-        {
+        if (tradeable) {
             g.fillOval(badgeX + 1, badgeY + 1, badge, badge);
-        }
-        else
-        {
+        } else {
             Polygon shadow = new Polygon(
-                    new int[]{badgeX + badge / 2 + 1, badgeX + badge + 1, badgeX + badge / 2 + 1, badgeX + 1},
-                    new int[]{badgeY + 1, badgeY + badge / 2 + 1, badgeY + badge + 1, badgeY + badge / 2 + 1},
-                    4
-            );
+                    new int[] { badgeX + badge / 2 + 1, badgeX + badge + 1, badgeX + badge / 2 + 1, badgeX + 1 },
+                    new int[] { badgeY + 1, badgeY + badge / 2 + 1, badgeY + badge + 1, badgeY + badge / 2 + 1 },
+                    4);
             g.fillPolygon(shadow);
         }
 
         g.setComposite(AlphaComposite.SrcOver.derive(0.95f));
         g.setColor(accent);
-        if (tradeable)
-        {
+        if (tradeable) {
             g.fillOval(badgeX, badgeY, badge, badge);
-        }
-        else
-        {
+        } else {
             Polygon diamond = new Polygon(
-                    new int[]{badgeX + badge / 2, badgeX + badge, badgeX + badge / 2, badgeX},
-                    new int[]{badgeY, badgeY + badge / 2, badgeY + badge, badgeY + badge / 2},
-                    4
-            );
+                    new int[] { badgeX + badge / 2, badgeX + badge, badgeX + badge / 2, badgeX },
+                    new int[] { badgeY, badgeY + badge / 2, badgeY + badge, badgeY + badge / 2 },
+                    4);
             g.fillPolygon(diamond);
         }
 
         g.setComposite(AlphaComposite.SrcOver.derive(0.9f));
         g.setStroke(new BasicStroke(1.1f));
         g.setColor(new Color(0, 0, 0, 110));
-        if (tradeable)
-        {
+        if (tradeable) {
             g.drawOval(badgeX, badgeY, badge, badge);
-        }
-        else
-        {
+        } else {
             Polygon outline = new Polygon(
-                    new int[]{badgeX + badge / 2, badgeX + badge, badgeX + badge / 2, badgeX},
-                    new int[]{badgeY, badgeY + badge / 2, badgeY + badge, badgeY + badge / 2},
-                    4
-            );
+                    new int[] { badgeX + badge / 2, badgeX + badge, badgeX + badge / 2, badgeX },
+                    new int[] { badgeY, badgeY + badge / 2, badgeY + badge, badgeY + badge / 2 },
+                    4);
             g.drawPolygon(outline);
         }
         g.setStroke(oldStroke);
         g.setComposite(oldComposite);
     }
 
-    private void normalizeOnce(float step)
-    {
+    private void normalizeOnce(float step) {
         if (rollOffset >= step) {
             rollOffset -= step;
             if (!rollingColumns.isEmpty()) {
@@ -1462,54 +1350,62 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         }
     }
 
-    private int nextUniqueRollItem()
-    {
-        if (randomLockedItemSupplier == null)
-        {
+    private int nextUniqueRollItem() {
+        if (randomLockedItemSupplier == null) {
             return 0;
         }
 
         final int maxAttempts = Math.max(10, columnCount * DRAW_COUNT);
         int fallback = 0;
 
-        for (int attempt = 0; attempt < maxAttempts; attempt++)
-        {
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
             Integer rolled = randomLockedItemSupplier.get();
             int candidate = rolled != null ? rolled : 0;
             fallback = candidate;
-            if (candidate == 0)
-            {
+            if (candidate == 0) {
                 break;
             }
-            if (uniqueRollItems.add(candidate))
-            {
+            if (uniqueRollItems.add(candidate)) {
                 return candidate;
             }
         }
 
-        if (fallback != 0)
-        {
+        if (fallback != 0) {
             uniqueRollItems.add(fallback);
         }
         return fallback;
     }
 
-    private float normalizeStep(float value, float step)
-    {
-        if (step == 0f)
-        {
+    private float normalizeStep(float value, float step) {
+        if (step == 0f) {
             return 0f;
         }
         float adjusted = value % step;
-        if (adjusted < 0)
-        {
+        if (adjusted < 0) {
             adjusted += step;
         }
         return adjusted;
     }
 
-    private void drawSlotWindow(Graphics2D g, int x, int y, int width, int height, float scale)
-    {
+    private float getResponsiveLayoutScale(int viewportHeight) {
+        if (viewportHeight <= 0) {
+            return 1f;
+        }
+        float scale = viewportHeight / RESPONSIVE_BASE_VIEWPORT_HEIGHT;
+        if (scale < RESPONSIVE_MIN_SCALE) {
+            return RESPONSIVE_MIN_SCALE;
+        }
+        if (scale > RESPONSIVE_MAX_SCALE) {
+            return RESPONSIVE_MAX_SCALE;
+        }
+        return scale;
+    }
+
+    private int scaleLayoutValue(int value, float scale, int min) {
+        return Math.max(min, Math.round(value * scale));
+    }
+
+    private void drawSlotWindow(Graphics2D g, int x, int y, int width, int height, float scale) {
         Rectangle2D.Float frame = new Rectangle2D.Float(x, y, width, height);
         GradientPaint paint = new GradientPaint(
                 x,
@@ -1517,8 +1413,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 SLOT_FILL_TOP,
                 x,
                 y + height,
-                SLOT_FILL_BOTTOM
-        );
+                SLOT_FILL_BOTTOM);
         Paint oldPaint = g.getPaint();
         Stroke oldStroke = g.getStroke();
         Composite oldComposite = g.getComposite();
@@ -1530,8 +1425,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 x + 3,
                 y + 3,
                 width - 6,
-                height - 6
-        );
+                height - 6);
         g.setPaint(scale > 1f ? SLOT_HIGHLIGHT : new Color(236, 222, 180, 45));
         g.setStroke(new BasicStroke(2f));
         g.draw(inner);
@@ -1552,22 +1446,22 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setComposite(AlphaComposite.SrcOver.derive(scale > 1f ? 0.6f : 0.45f));
         g.setStroke(new BasicStroke(4.2f));
         g.setColor(CORNER_SHADOW);
-        drawRectBracket(g, x - bracketPad, y - bracketPad, width + bracketPad * 2, height + bracketPad * 2, corner + bracketPad);
+        drawRectBracket(g, x - bracketPad, y - bracketPad, width + bracketPad * 2, height + bracketPad * 2,
+                corner + bracketPad);
         g.setComposite(AlphaComposite.SrcOver.derive(scale > 1f ? 0.9f : 0.75f));
         g.setStroke(new BasicStroke(3.2f));
         g.setColor(CORNER_HIGHLIGHT);
-        drawRectBracket(g, x - bracketPad, y - bracketPad, width + bracketPad * 2, height + bracketPad * 2, corner + bracketPad);
+        drawRectBracket(g, x - bracketPad, y - bracketPad, width + bracketPad * 2, height + bracketPad * 2,
+                corner + bracketPad);
         g.setComposite(oldComposite);
 
         g.setPaint(oldPaint);
         g.setStroke(oldStroke);
     }
 
-    private void drawChoiceLabel(Graphics2D g, Rectangle rect, Rectangle iconRect, int itemId)
-    {
+    private void drawChoiceLabel(Graphics2D g, Rectangle rect, Rectangle iconRect, int itemId) {
         String label = buildHoverText(itemId);
-        if (label == null || label.isEmpty())
-        {
+        if (label == null || label.isEmpty()) {
             return;
         }
         Font oldFont = g.getFont();
@@ -1577,8 +1471,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         int availableTop = iconRect.y + iconRect.height + 4;
         int availableBottom = rect.y + rect.height - paddingY;
         int availableHeight = Math.max(0, availableBottom - availableTop);
-        if (availableHeight <= 0)
-        {
+        if (availableHeight <= 0) {
             g.setFont(oldFont);
             return;
         }
@@ -1586,25 +1479,21 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         List<String> lines = Collections.emptyList();
         FontMetrics fm = null;
         Font labelFont = LABEL_FONT;
-        for (int size = LABEL_FONT.getSize(); size >= MIN_LABEL_FONT_SIZE; size--)
-        {
+        for (int size = LABEL_FONT.getSize(); size >= MIN_LABEL_FONT_SIZE; size--) {
             labelFont = LABEL_FONT.deriveFont((float) size);
             g.setFont(labelFont);
             fm = g.getFontMetrics();
             lines = wrapToTwoLines(label, fm, maxWidth);
-            if (lines.isEmpty())
-            {
+            if (lines.isEmpty()) {
                 continue;
             }
             int textBlockHeight = fm.getHeight() * lines.size();
-            if (textBlockHeight <= availableHeight || size == MIN_LABEL_FONT_SIZE)
-            {
+            if (textBlockHeight <= availableHeight || size == MIN_LABEL_FONT_SIZE) {
                 break;
             }
         }
         int lineCount = lines.size();
-        if (lineCount == 0 || fm == null)
-        {
+        if (lineCount == 0 || fm == null) {
             g.setFont(oldFont);
             return;
         }
@@ -1612,17 +1501,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         int lineHeight = fm.getHeight();
         int textBlockHeight = lineHeight * lineCount;
         int startY;
-        if (availableHeight >= textBlockHeight)
-        {
+        if (availableHeight >= textBlockHeight) {
             startY = availableTop + (availableHeight - textBlockHeight) / 2 + fm.getAscent();
-        }
-        else
-        {
+        } else {
             startY = availableBottom - textBlockHeight + fm.getAscent();
         }
 
-        for (int i = 0; i < lineCount; i++)
-        {
+        for (int i = 0; i < lineCount; i++) {
             String line = lines.get(i);
             int textWidth = fm.stringWidth(line);
             int x = rect.x + Math.max(paddingX, (rect.width - textWidth) / 2);
@@ -1635,15 +1520,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         g.setFont(oldFont);
     }
 
-    private List<String> wrapToTwoLines(String text, FontMetrics fm, int maxWidth)
-    {
+    private List<String> wrapToTwoLines(String text, FontMetrics fm, int maxWidth) {
         String trimmed = text.trim();
-        if (trimmed.isEmpty())
-        {
+        if (trimmed.isEmpty()) {
             return Collections.emptyList();
         }
-        if (fm.stringWidth(trimmed) <= maxWidth)
-        {
+        if (fm.stringWidth(trimmed) <= maxWidth) {
             return Collections.singletonList(trimmed);
         }
 
@@ -1651,15 +1533,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         String bestSecond = "";
         int bestScore = Integer.MAX_VALUE;
         String[] parts = trimmed.split("\\s+");
-        for (int i = 1; i < parts.length; i++)
-        {
+        for (int i = 1; i < parts.length; i++) {
             String first = String.join(" ", Arrays.copyOfRange(parts, 0, i));
             String second = String.join(" ", Arrays.copyOfRange(parts, i, parts.length));
             int w1 = fm.stringWidth(first);
             int w2 = fm.stringWidth(second);
             int score = Math.max(w1, w2);
-            if (score < bestScore)
-            {
+            if (score < bestScore) {
                 bestScore = score;
                 bestFirst = first;
                 bestSecond = second;
@@ -1667,8 +1547,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         }
 
         List<String> lines = new ArrayList<>(2);
-        if (!bestFirst.isEmpty() && !bestSecond.isEmpty())
-        {
+        if (!bestFirst.isEmpty() && !bestSecond.isEmpty()) {
             lines.add(elideToWidth(bestFirst, fm, maxWidth));
             lines.add(elideToWidth(bestSecond, fm, maxWidth));
             return lines;
@@ -1682,72 +1561,59 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         return lines;
     }
 
-    private String elideToWidth(String text, FontMetrics fm, int maxWidth)
-    {
+    private String elideToWidth(String text, FontMetrics fm, int maxWidth) {
         String trimmed = text.trim();
-        if (trimmed.isEmpty() || fm.stringWidth(trimmed) <= maxWidth)
-        {
+        if (trimmed.isEmpty() || fm.stringWidth(trimmed) <= maxWidth) {
             return trimmed;
         }
         String ellipsis = "...";
         int ellipsisWidth = fm.stringWidth(ellipsis);
-        if (ellipsisWidth >= maxWidth)
-        {
+        if (ellipsisWidth >= maxWidth) {
             return ellipsis;
         }
         int end = trimmed.length();
-        while (end > 0 && fm.stringWidth(trimmed.substring(0, end)) + ellipsisWidth > maxWidth)
-        {
+        while (end > 0 && fm.stringWidth(trimmed.substring(0, end)) + ellipsisWidth > maxWidth) {
             end--;
         }
-        if (end <= 0)
-        {
+        if (end <= 0) {
             return ellipsis;
         }
         return trimmed.substring(0, end) + ellipsis;
     }
 
-    private String getItemNameSafe(int itemId)
-    {
-        if (itemId <= 0)
-        {
+    private String getItemNameSafe(int itemId) {
+        if (itemId <= 0) {
             return "";
         }
         ItemComposition composition = itemManager.getItemComposition(itemId);
-        if (composition == null)
-        {
+        if (composition == null) {
             return "";
         }
         String name = composition.getName();
-        if (name == null)
-        {
+        if (name == null) {
             return "";
         }
         name = name.trim();
-        if (name.isEmpty() || name.equalsIgnoreCase("null") || name.equalsIgnoreCase("Members") || name.equalsIgnoreCase("(Members)") || name.matches("(?i)null\\s*\\(Members\\)"))
-        {
+        if (name.isEmpty() || name.equalsIgnoreCase("null") || name.equalsIgnoreCase("Members")
+                || name.equalsIgnoreCase("(Members)") || name.matches("(?i)null\\s*\\(Members\\)")) {
             return "";
         }
         return name;
     }
 
-    private String buildHoverText(int itemId)
-    {
+    private String buildHoverText(int itemId) {
         String baseName = getItemNameSafe(itemId);
         String questName = QuestItemAllowlist.getQuestNameForItem(itemId);
-        if (questName == null || questName.trim().isEmpty())
-        {
+        if (questName == null || questName.trim().isEmpty()) {
             return baseName;
         }
-        if (baseName.isEmpty())
-        {
+        if (baseName.isEmpty()) {
             return questName;
         }
         return baseName + " (" + questName + ")";
     }
 
-    private void drawHighlight(Graphics2D g, int iconsX, int baseY, int itemId, int iconDimension, boolean emphasize)
-    {
+    private void drawHighlight(Graphics2D g, int iconsX, int baseY, int itemId, int iconDimension, boolean emphasize) {
         final float glowScale = emphasize ? 1.8f : 1.4f;
         final float glowHeightScale = emphasize ? 2.0f : 1.6f;
         final int glowW = (int) (iconDimension * glowScale);
@@ -1762,12 +1628,11 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
         final RadialGradientPaint glow = new RadialGradientPaint(
                 new Point2D.Float(cx, cy),
                 glowH / 2f,
-                new float[]{0f, 1f},
-                new Color[]{
+                new float[] { 0f, 1f },
+                new Color[] {
                         innerGlow,
                         outerGlow
-                }
-        );
+                });
         final Composite old = g.getComposite();
         g.setComposite(AlphaComposite.SrcOver.derive(0.6f));
         g.setPaint(glow);
@@ -1810,21 +1675,17 @@ public class ChoicerOverlay extends Overlay implements RollOverlay
                 iconDimension + 2,
                 iconDimension + 2,
                 6,
-                6
-        );
+                6);
         g.setStroke(oldStroke);
         g.setComposite(oldComposite);
     }
 
-    private Color[] getHighlightPalette(int itemId)
-    {
+    private Color[] getHighlightPalette(int itemId) {
         return isTradeableItem(itemId) ? TRADEABLE_GLOW : UNTRADEABLE_GLOW;
     }
 
-    private boolean isTradeableItem(int itemId)
-    {
-        if (itemId <= 0)
-        {
+    private boolean isTradeableItem(int itemId) {
+        if (itemId <= 0) {
             return true;
         }
         ItemComposition composition = itemManager.getItemComposition(itemId);

@@ -20,8 +20,7 @@ import javax.inject.Singleton;
  * Monitors for account changes and updates the stored display name.
  */
 @Singleton
-public class AccountManager
-{
+public class AccountManager {
 	@Inject
 	private Client client;
 

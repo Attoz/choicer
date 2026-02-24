@@ -28,8 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Panel for displaying rolled/obtained items with list-based filtering.
  */
-public class ChoicerPanel extends PluginPanel
-{
+public class ChoicerPanel extends PluginPanel {
     private static final Color BG = new Color(34, 30, 23);
     private static final Color PANEL_BG = new Color(44, 38, 28);
     private static final Color PANEL_BG_ALT = new Color(50, 43, 32);
@@ -47,8 +46,7 @@ public class ChoicerPanel extends PluginPanel
     private static final Font UI_FONT = new Font("Georgia", Font.PLAIN, 12);
     private static final Font SMALL_FONT = new Font("Georgia", Font.PLAIN, 11);
 
-    private enum ListMode
-    {
+    private enum ListMode {
         ROLLED("Rolled"),
         OBTAINED("Obtained"),
         ROLLED_NOT_OBTAINED("Rolled, not Obtained"),
@@ -56,21 +54,18 @@ public class ChoicerPanel extends PluginPanel
 
         private final String label;
 
-        ListMode(String label)
-        {
+        ListMode(String label) {
             this.label = label;
         }
 
         @Override
-        public String toString()
-        {
+        public String toString() {
             return label;
         }
     }
 
     private static final Map<ListMode, String> MODE_TOOLTIPS = new EnumMap<>(ListMode.class);
-    static
-    {
+    static {
         MODE_TOOLTIPS.put(ListMode.ROLLED, "Show items that have been rolled (unlocked)");
         MODE_TOOLTIPS.put(ListMode.OBTAINED, "Show items that have been obtained in-game");
         MODE_TOOLTIPS.put(ListMode.ROLLED_NOT_OBTAINED, "Show rolled items you haven't obtained yet");
@@ -104,9 +99,7 @@ public class ChoicerPanel extends PluginPanel
             ItemManager itemManager,
             HashSet<Integer> allTradeableItems,
             ClientThread clientThread,
-            RollAnimationManager rollAnimationManager
-    )
-    {
+            RollAnimationManager rollAnimationManager) {
         this.obtainedItemsManager = obtainedItemsManager;
         this.rolledItemsManager = rolledItemsManager;
         this.itemManager = itemManager;
@@ -116,8 +109,7 @@ public class ChoicerPanel extends PluginPanel
         init();
     }
 
-    private void init()
-    {
+    private void init() {
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(12, 12, 12, 12));
         setBackground(BG);
@@ -137,8 +129,7 @@ public class ChoicerPanel extends PluginPanel
         add(buildBottom(), BorderLayout.SOUTH);
     }
 
-    private JPanel buildHeaderPanel()
-    {
+    private JPanel buildHeaderPanel() {
         JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         headerPanel.setOpaque(false);
 
@@ -153,8 +144,7 @@ public class ChoicerPanel extends PluginPanel
         JButton discordButton = new JButton();
         discordButton.setToolTipText("Join the Choicer Discord");
         BufferedImage discordImage = ImageUtil.loadImageResource(getClass(), "/com/choicer/discord.png");
-        if (discordImage != null)
-        {
+        if (discordImage != null) {
             Image scaledImage = discordImage.getScaledInstance(20, 20, Image.SCALE_SMOOTH);
             discordButton.setIcon(new ImageIcon(scaledImage));
         }
@@ -170,8 +160,7 @@ public class ChoicerPanel extends PluginPanel
         return headerPanel;
     }
 
-    private JPanel buildSearchBar()
-    {
+    private JPanel buildSearchBar() {
         JPanel container = new JPanel(new BorderLayout());
         container.setOpaque(false);
 
@@ -189,11 +178,9 @@ public class ChoicerPanel extends PluginPanel
         searchField.setBorder(null);
         searchField.setCaretColor(TEXT);
         searchField.setFont(UI_FONT);
-        searchField.addKeyListener(new KeyAdapter()
-        {
+        searchField.addKeyListener(new KeyAdapter() {
             @Override
-            public void keyReleased(KeyEvent e)
-            {
+            public void keyReleased(KeyEvent e) {
                 searchText = searchField.getText().toLowerCase();
                 updatePanel();
             }
@@ -204,8 +191,7 @@ public class ChoicerPanel extends PluginPanel
         return container;
     }
 
-    private JPanel buildFilterRow()
-    {
+    private JPanel buildFilterRow() {
         JPanel row = new JPanel(new BorderLayout(8, 0));
         row.setOpaque(false);
 
@@ -218,11 +204,9 @@ public class ChoicerPanel extends PluginPanel
         modeDropdown.setBackground(PANEL_BG);
         modeDropdown.setForeground(TEXT);
         modeDropdown.setToolTipText(MODE_TOOLTIPS.get(listMode));
-        modeDropdown.addActionListener(e ->
-        {
+        modeDropdown.addActionListener(e -> {
             Object sel = modeDropdown.getSelectedItem();
-            if (sel instanceof ListMode)
-            {
+            if (sel instanceof ListMode) {
                 listMode = (ListMode) sel;
                 modeDropdown.setToolTipText(MODE_TOOLTIPS.get(listMode));
                 updatePanel();
@@ -234,8 +218,7 @@ public class ChoicerPanel extends PluginPanel
         return row;
     }
 
-    private JPanel buildCenter()
-    {
+    private JPanel buildCenter() {
         itemList.setCellRenderer(new ItemCellRenderer());
         itemList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         itemList.setVisibleRowCount(12);
@@ -245,8 +228,7 @@ public class ChoicerPanel extends PluginPanel
         JScrollPane scroll = new JScrollPane(
                 itemList,
                 JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        );
+                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.getViewport().setBackground(PANEL_BG);
         scroll.setBorder(null);
 
@@ -263,8 +245,7 @@ public class ChoicerPanel extends PluginPanel
         return container;
     }
 
-    private JPanel buildBottom()
-    {
+    private JPanel buildBottom() {
         JPanel bottom = new JPanel();
         bottom.setLayout(new BoxLayout(bottom, BoxLayout.Y_AXIS));
         bottom.setOpaque(false);
@@ -294,45 +275,41 @@ public class ChoicerPanel extends PluginPanel
         return bottom;
     }
 
-    private void performManualRoll(java.awt.event.ActionEvent e)
-    {
-        if (rollAnimationManager.isRolling()) return;
-        if (!rollAnimationManager.hasTradeablesReady()) return;
+    private void performManualRoll(java.awt.event.ActionEvent e) {
+        if (rollAnimationManager.isRolling())
+            return;
+        if (!rollAnimationManager.hasTradeablesReady())
+            return;
 
         final List<Integer> tradeableSnapshot;
-        synchronized (allTradeableItems)
-        {
+        synchronized (allTradeableItems) {
             tradeableSnapshot = new ArrayList<>(allTradeableItems);
         }
 
         List<Integer> locked = new ArrayList<>();
-        for (int id : tradeableSnapshot)
-        {
-            if (!rolledItemsManager.isRolled(id))
-            {
+        for (int id : tradeableSnapshot) {
+            if (!rolledItemsManager.isRolled(id)) {
                 locked.add(id);
             }
         }
 
-        if (locked.isEmpty()) return;
+        if (locked.isEmpty())
+            return;
 
         rollAnimationManager.setManualRoll(true);
         rollAnimationManager.enqueueRoll(0);
     }
 
-    public void updatePanel()
-    {
+    public void updatePanel() {
         final ListMode modeSnap = listMode;
         final String searchSnap = searchText;
 
-        clientThread.invokeLater(() ->
-        {
+        clientThread.invokeLater(() -> {
             Set<Integer> obtained = obtainedItemsManager.getObtainedItems();
             Set<Integer> rolled = rolledItemsManager.getRolledItems();
             List<Integer> base = new ArrayList<>();
 
-            switch (modeSnap)
-            {
+            switch (modeSnap) {
                 case ROLLED:
                     base.addAll(rolled);
                     break;
@@ -349,10 +326,8 @@ public class ChoicerPanel extends PluginPanel
                     break;
             }
 
-            if (searchSnap != null && !searchSnap.isEmpty())
-            {
-                base.removeIf(id ->
-                {
+            if (searchSnap != null && !searchSnap.isEmpty()) {
+                base.removeIf(id -> {
                     ItemComposition comp = itemManager.getItemComposition(id);
                     String name = comp != null ? comp.getName() : null;
                     return name == null || !name.toLowerCase().contains(searchSnap);
@@ -362,16 +337,13 @@ public class ChoicerPanel extends PluginPanel
             Collections.reverse(base);
 
             final int total;
-            synchronized (allTradeableItems)
-            {
+            synchronized (allTradeableItems) {
                 total = allTradeableItems.size();
             }
 
-            SwingUtilities.invokeLater(() ->
-            {
+            SwingUtilities.invokeLater(() -> {
                 listModel.clear();
-                for (Integer id : base)
-                {
+                for (Integer id : base) {
                     listModel.addElement(id);
                 }
                 countLabel.setText(formatCountLabel(modeSnap, base.size(), total));
@@ -381,11 +353,9 @@ public class ChoicerPanel extends PluginPanel
         });
     }
 
-    private String formatCountLabel(ListMode mode, int count, int total)
-    {
+    private String formatCountLabel(ListMode mode, int count, int total) {
         String label;
-        switch (mode)
-        {
+        switch (mode) {
             case OBTAINED:
                 label = "Obtained";
                 break;
@@ -403,13 +373,11 @@ public class ChoicerPanel extends PluginPanel
         return String.format("%s: %d/%d", label, count, total);
     }
 
-    private class ItemCellRenderer extends JPanel implements ListCellRenderer<Integer>
-    {
+    private class ItemCellRenderer extends JPanel implements ListCellRenderer<Integer> {
         private final JLabel iconLabel = new JLabel();
         private final JLabel nameLabel = new JLabel();
 
-        ItemCellRenderer()
-        {
+        ItemCellRenderer() {
             setLayout(new BorderLayout(6, 0));
             setOpaque(true);
             iconLabel.setPreferredSize(new Dimension(32, 32));
@@ -422,94 +390,81 @@ public class ChoicerPanel extends PluginPanel
         @Override
         public Component getListCellRendererComponent(
                 JList<? extends Integer> list, Integer value, int index,
-                boolean isSelected, boolean cellHasFocus)
-        {
-            if (value == null)
-            {
+                boolean isSelected, boolean cellHasFocus) {
+            if (value == null) {
                 nameLabel.setText("");
                 iconLabel.setIcon(null);
                 return this;
             }
 
             ImageIcon ico = itemIconCache.get(value);
-            if (ico != null)
-            {
+            if (ico != null) {
                 iconLabel.setIcon(ico);
-            }
-            else
-            {
+            } else {
                 iconLabel.setIcon(null);
                 requestItemIcon(value, list, index);
             }
 
             String name = itemNameCache.get(value);
-            if (name != null)
-            {
+            if (name != null) {
                 nameLabel.setText(name);
                 setToolTipText(name);
-            }
-            else
-            {
+            } else {
                 nameLabel.setText("...");
                 setToolTipText(null);
                 requestItemName(value, list, index);
             }
 
-            if (isSelected)
-            {
+            if (isSelected) {
                 setBackground(SELECTION);
-            }
-            else
-            {
+            } else {
                 setBackground(index % 2 == 0 ? LIST_ROW_A : LIST_ROW_B);
             }
             return this;
         }
     }
 
-    private void requestItemIcon(int itemId, JList<?> list, int index)
-    {
-        if (!iconFetchInFlight.add(itemId)) return;
+    private void requestItemIcon(int itemId, JList<?> list, int index) {
+        if (!iconFetchInFlight.add(itemId))
+            return;
 
-        clientThread.invokeLater(() ->
-        {
+        clientThread.invokeLater(() -> {
             BufferedImage image = itemManager.getImage(itemId);
             ImageIcon icon = null;
-            if (image != null)
-            {
+            if (image != null) {
                 BufferedImage resized = ImageUtil.resizeImage(image, 32, 32);
                 icon = new ImageIcon(resized);
             }
             final ImageIcon finalIcon = icon;
-            SwingUtilities.invokeLater(() ->
-            {
-                if (finalIcon != null)
-                {
+            SwingUtilities.invokeLater(() -> {
+                if (finalIcon != null) {
                     itemIconCache.put(itemId, finalIcon);
                 }
                 iconFetchInFlight.remove(itemId);
                 Rectangle r = list.getCellBounds(index, index);
-                if (r != null) list.repaint(r);
-                else list.repaint();
+                if (r != null)
+                    list.repaint(r);
+                else
+                    list.repaint();
             });
         });
     }
 
-    private void requestItemName(int itemId, JList<?> list, int index)
-    {
-        if (!nameFetchInFlight.add(itemId)) return;
+    private void requestItemName(int itemId, JList<?> list, int index) {
+        if (!nameFetchInFlight.add(itemId))
+            return;
 
-        clientThread.invokeLater(() ->
-        {
+        clientThread.invokeLater(() -> {
             ItemComposition comp = itemManager.getItemComposition(itemId);
             String name = (comp != null) ? comp.getName() : "Unknown";
-            SwingUtilities.invokeLater(() ->
-            {
+            SwingUtilities.invokeLater(() -> {
                 itemNameCache.put(itemId, name);
                 nameFetchInFlight.remove(itemId);
                 Rectangle r = list.getCellBounds(index, index);
-                if (r != null) list.repaint(r);
-                else list.repaint();
+                if (r != null)
+                    list.repaint(r);
+                else
+                    list.repaint();
             });
         });
     }

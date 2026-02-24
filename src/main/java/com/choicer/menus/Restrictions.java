@@ -53,17 +53,21 @@ public class Restrictions {
 	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.MagicSpellbook.TOOLTIP;
 	public static final int AUTOCAST_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.Autocast.INFO;
 
-	@Inject private ChoicerPlugin plugin;
-	@Inject private Client client;
-	@Inject private RolledItemsManager rolledItemsManager;
-	@Inject private AccountManager accountManager;
+	@Inject
+	private ChoicerPlugin plugin;
+	@Inject
+	private Client client;
+	@Inject
+	private RolledItemsManager rolledItemsManager;
+	@Inject
+	private AccountManager accountManager;
 	private final Set<SkillOp> enabledSkillOps = EnumSet.noneOf(SkillOp.class);
 	private final HashSet<Integer> availableRunes = new HashSet<>();
 
 	@Subscribe
-	public void onGameTick(GameTick event)
-	{
-		if (!accountManager.ready()) return;
+	public void onGameTick(GameTick event) {
+		if (!accountManager.ready())
+			return;
 		enabledSkillOps.clear();
 		availableRunes.clear();
 
@@ -146,12 +150,9 @@ public class Restrictions {
 		if (sack != null) {
 			int sackId = sack.getSackItemId();
 			ItemContainer inv = client.getItemContainer(InventoryID.INV);
-			if (inv != null	&& (sackId == ItemID.BLIGHTED_SACK_SURGE || rolledItemsManager.isRolled(sackId)))
-			{
-				for (Item item : inv.getItems())
-				{
-					if (item.getId() == sackId)
-					{
+			if (inv != null && (sackId == ItemID.BLIGHTED_SACK_SURGE || rolledItemsManager.isRolled(sackId))) {
+				for (Item item : inv.getItems()) {
+					if (item.getId() == sackId) {
 						return true;
 					}
 				}

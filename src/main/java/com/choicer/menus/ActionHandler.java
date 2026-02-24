@@ -44,8 +44,7 @@ public class ActionHandler {
 			MenuAction.GROUND_ITEM_SECOND_OPTION,
 			MenuAction.GROUND_ITEM_THIRD_OPTION,
 			MenuAction.GROUND_ITEM_FOURTH_OPTION,
-			MenuAction.GROUND_ITEM_FIFTH_OPTION
-	);
+			MenuAction.GROUND_ITEM_FIFTH_OPTION);
 
 	private static final Set<Integer> ALWAYS_ALLOW_OBJECT_IDS = new HashSet<>();
 
@@ -54,11 +53,9 @@ public class ActionHandler {
 			MenuAction.GAME_OBJECT_SECOND_OPTION,
 			MenuAction.GAME_OBJECT_THIRD_OPTION,
 			MenuAction.GAME_OBJECT_FOURTH_OPTION,
-			MenuAction.GAME_OBJECT_FIFTH_OPTION
-	);
+			MenuAction.GAME_OBJECT_FIFTH_OPTION);
 
-	static
-	{
+	static {
 		ALWAYS_ALLOW_OBJECT_IDS.add(net.runelite.api.gameval.ObjectID.CATABOW);
 	}
 
@@ -126,7 +123,8 @@ public class ActionHandler {
 	}
 
 	private boolean inactive() {
-		if (!rolledItemsManager.ready()) return true;
+		if (!rolledItemsManager.ready())
+			return true;
 		return client.getGameState().getState() < GameState.LOADING.getState();
 	}
 
@@ -233,28 +231,26 @@ public class ActionHandler {
 		String target = Text.removeTags(entry.getTarget());
 
 		EnabledUI ui = currentEnabledUi();
-		if (ui != null && ui.isAllowAllActions())
-		{
+		if (ui != null && ui.isAllowAllActions()) {
 			return true;
 		}
 
 		// Allowlisted world objects bypass all restrictions
-		if (GAME_OBJECT_ACTIONS.contains(action) && ALWAYS_ALLOW_OBJECT_IDS.contains(entry.getIdentifier()))
-		{
+		if (GAME_OBJECT_ACTIONS.contains(action) && ALWAYS_ALLOW_OBJECT_IDS.contains(entry.getIdentifier())) {
 			return true;
 		}
 
 		// Always allow "Drop" / "Check"
 		if (option.equalsIgnoreCase("drop") || option.equalsIgnoreCase("check"))
 			return true;
-		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub"))
-		{
-			if (!plugin.isInPlay(id)) { return true; }
+		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub")) {
+			if (!plugin.isInPlay(id)) {
+				return true;
+			}
 			return rolledItemsManager.isRolled(id);
 		}
 		if ("harpoon".equalsIgnoreCase(option)
-				&& !hasAnyHarpoonInInvOrWorn())
-		{
+				&& !hasAnyHarpoonInInvOrWorn()) {
 			String t = target.toLowerCase();
 			if (t.contains("fishing spot") || t.contains("spirit pool"))
 				return true;
@@ -279,7 +275,7 @@ public class ActionHandler {
 	 * If a ground item is locked, this method consumes the event.
 	 */
 	public static void handleGroundItems(ItemManager itemManager, RolledItemsManager rolledItemsManager,
-										 MenuOptionClicked event, ChoicerPlugin plugin) {
+			MenuOptionClicked event, ChoicerPlugin plugin) {
 		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
 			int rawItemId = event.getId() != -1
 					? event.getId()
@@ -296,29 +292,26 @@ public class ActionHandler {
 	}
 
 	/**
-	 Checks for harpoon in inventory and worn items for
-	 barbarian fishing.
+	 * Checks for harpoon in inventory and worn items for
+	 * barbarian fishing.
 	 **/
-	private boolean hasAnyHarpoonInInvOrWorn()
-	{
+	private boolean hasAnyHarpoonInInvOrWorn() {
 		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
-		ItemContainer inv  = client.getItemContainer(InventoryID.INV);
+		ItemContainer inv = client.getItemContainer(InventoryID.INV);
 
-		if (worn != null)
-		{
-			for (Item item : worn.getItems())
-			{
+		if (worn != null) {
+			for (Item item : worn.getItems()) {
 				SkillItem si = SkillItem.fromId(item.getId());
-				if (si != null && si.getSkillOp() == SkillOp.HARPOON) return true;
+				if (si != null && si.getSkillOp() == SkillOp.HARPOON)
+					return true;
 			}
 		}
 
-		if (inv != null)
-		{
-			for (Item item : inv.getItems())
-			{
+		if (inv != null) {
+			for (Item item : inv.getItems()) {
 				SkillItem si = SkillItem.fromId(item.getId());
-				if (si != null && si.getSkillOp() == SkillOp.HARPOON) return true;
+				if (si != null && si.getSkillOp() == SkillOp.HARPOON)
+					return true;
 			}
 		}
 

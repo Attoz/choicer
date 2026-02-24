@@ -10,7 +10,7 @@ public enum EnabledUI {
 	DEPOSIT_BOX(InterfaceID.BANK_DEPOSITBOX, true, true),
 	CUSTOM_FUR_STORE(InterfaceID.HuntingCustomfurs.CONTENT, false, true),
 	Crafting_Gold(InterfaceID.CraftingGold.UNIVERSE, false, true),
-	TTREK_REWARDS(InterfaceID.TREK_REWARDS,false, true),
+	TTREK_REWARDS(InterfaceID.TREK_REWARDS, false, true),
 	SKILLMULTI(InterfaceID.Skillmulti.ALL, false, true),
 	RUNEDOKU(InterfaceID.ROGUETRADER_SUDOKU, false, true);
 

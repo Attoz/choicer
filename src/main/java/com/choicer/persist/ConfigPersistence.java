@@ -11,7 +11,8 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Mirrors Choicer state into RuneLite ConfigManager so it can sync across machines
+ * Mirrors Choicer state into RuneLite ConfigManager so it can sync across
+ * machines
  * via RuneLite's profile/cloud sync.
  * Uses stamped read/write: each set is stored with a last-write timestamp
  * to support last-writer-wins (LWW) reconciliation across machines.

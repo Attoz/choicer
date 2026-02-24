@@ -42,7 +42,9 @@ public class RollAnimationManager {
     @Inject
     private ClientThread clientThread;
     @Inject
-    private UnlockedItemsManager unlockedManager;
+    private RolledItemsManager rolledManager;
+    @Inject
+    private ObtainedItemsManager obtainedManager;
     @Inject
     private ChoicerOverlay choicerOverlay;
     @Inject
@@ -179,7 +181,7 @@ public class RollAnimationManager {
             }
 
             if (itemToUnlock != 0) {
-                unlockedManager.unlockItem(itemToUnlock);
+                rolledManager.markRolled(itemToUnlock);
             }
 
             final boolean wasManualRoll = isManualRoll();
@@ -240,7 +242,7 @@ public class RollAnimationManager {
         }
         List<Integer> locked = new ArrayList<>();
         for (int id : allTradeableItems) {
-            if (!unlockedManager.isUnlocked(id)) {
+            if (!rolledManager.isRolled(id)) {
                 locked.add(id);
             }
         }
@@ -286,7 +288,7 @@ public class RollAnimationManager {
         int target = Math.max(2, Math.min(5, config.choicerOptionCount()));
         LinkedHashSet<Integer> options = new LinkedHashSet<>();
         boolean hasTradeableOption = isTradeableItem(obtainedItemId);
-        if (obtainedItemId != 0 && !unlockedManager.isUnlocked(obtainedItemId)) {
+        if (obtainedItemId != 0 && !rolledManager.isRolled(obtainedItemId)) {
             options.add(obtainedItemId);
         }
 

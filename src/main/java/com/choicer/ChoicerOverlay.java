@@ -239,8 +239,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
     List<Rectangle> getCurrentHitboxes() {
         synchronized (columnHitboxes) {
             List<Rectangle> copy = new ArrayList<>(columnHitboxes.size());
-            for (Rectangle rect : columnHitboxes)
-            {
+            for (Rectangle rect : columnHitboxes) {
                 copy.add(new Rectangle(rect));
             }
             return copy;

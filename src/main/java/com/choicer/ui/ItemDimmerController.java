@@ -51,17 +51,18 @@ public class ItemDimmerController {
         this.dimOpacity = Math.max(0, Math.min(255, opacity));
     }
 
-    private boolean isCollectionLogWidget(Widget w)
-    {
+    private boolean isCollectionLogWidget(Widget w) {
         return w != null && w.getId() >>> 16 == 621;
     }
 
     /**
-     * Last chance before drawing this frame; safe place to enforce opacity without races.
+     * Last chance before drawing this frame; safe place to enforce opacity without
+     * races.
      */
     @Subscribe
     public void onBeforeRender(BeforeRender e) {
-        if (!enabled || client.getGameState() != GameState.LOGGED_IN) return;
+        if (!enabled || client.getGameState() != GameState.LOGGED_IN)
+            return;
 
         dimDecisionCache.clear();
         dimAllRoots();
@@ -69,7 +70,8 @@ public class ItemDimmerController {
 
     private void dimAllRoots() {
         final Widget[] roots = client.getWidgetRoots();
-        if (roots == null) return;
+        if (roots == null)
+            return;
 
         for (Widget root : roots) {
             if (root != null) {
@@ -79,22 +81,30 @@ public class ItemDimmerController {
     }
 
     private void walkAndDim(Widget w) {
-        if (w == null || w.isHidden()) return;
+        if (w == null || w.isHidden())
+            return;
 
         // Don't dim item icons in EnabledUIs configured to not grey locked items
         int groupId = w.getId() >>> 16;
         EnabledUI ui = EnabledUI.fromGroupId(groupId);
         if (ui != null && !ui.isGreyLockedItems()) {
             Widget[] dyn = w.getDynamicChildren();
-            if (dyn != null) for (Widget c : dyn) walkAndDim(c);
+            if (dyn != null)
+                for (Widget c : dyn)
+                    walkAndDim(c);
             Widget[] stat = w.getStaticChildren();
-            if (stat != null) for (Widget c : stat) walkAndDim(c);
+            if (stat != null)
+                for (Widget c : stat)
+                    walkAndDim(c);
             Widget[] nest = w.getNestedChildren();
-            if (nest != null) for (Widget c : nest) walkAndDim(c);
+            if (nest != null)
+                for (Widget c : nest)
+                    walkAndDim(c);
             return;
         }
 
-        if (isCollectionLogWidget(w)) return;
+        if (isCollectionLogWidget(w))
+            return;
         final int itemId = w.getItemId();
         if (itemId > 0) {
             // Don’t override the game’s own dim on bank placeholders
@@ -107,17 +117,24 @@ public class ItemDimmerController {
         }
 
         final Widget[] dyn = w.getDynamicChildren();
-        if (dyn != null) for (Widget c : dyn) walkAndDim(c);
+        if (dyn != null)
+            for (Widget c : dyn)
+                walkAndDim(c);
         final Widget[] stat = w.getStaticChildren();
-        if (stat != null) for (Widget c : stat) walkAndDim(c);
+        if (stat != null)
+            for (Widget c : stat)
+                walkAndDim(c);
         final Widget[] nest = w.getNestedChildren();
-        if (nest != null) for (Widget c : nest) walkAndDim(c);
+        if (nest != null)
+            for (Widget c : nest)
+                walkAndDim(c);
     }
 
     private boolean shouldDimMemoized(int rawItemId) {
         final int key = EnsouledHeadMapping.toTradeableId(rawItemId); // normalize cache key
         final Boolean cached = dimDecisionCache.get(key);
-        if (cached != null) return cached;
+        if (cached != null)
+            return cached;
 
         final boolean result = shouldDim(rawItemId);
         dimDecisionCache.put(key, result);
@@ -127,8 +144,10 @@ public class ItemDimmerController {
     private boolean shouldDim(int rawItemId) {
         final int mappedItemId = EnsouledHeadMapping.toTradeableId(rawItemId);
         final int canonicalItemId = canonicalize(mappedItemId);
-        if (canonicalItemId <= 0) return false;
-        if (!isDimEligible(canonicalItemId)) return false;
+        if (canonicalItemId <= 0)
+            return false;
+        if (!isDimEligible(canonicalItemId))
+            return false;
         return !isRolled(mappedItemId, canonicalItemId);
     }
 
@@ -142,11 +161,13 @@ public class ItemDimmerController {
     }
 
     private boolean isRolled(int normalizedItemId, int canonicalItemId) {
-        if (rolledItemsManager  == null) return true; // fail open if manager missing
+        if (rolledItemsManager == null)
+            return true; // fail open if manager missing
 
         try {
             // Fast paths: raw or canonical known obtained
-            if (normalizedItemId > 0 && rolledItemsManager.isRolled(normalizedItemId)) return true;
+            if (normalizedItemId > 0 && rolledItemsManager.isRolled(normalizedItemId))
+                return true;
             if (canonicalItemId > 0 && normalizedItemId != canonicalItemId && obtainedItemSubCheck(canonicalItemId))
                 return true;
 
@@ -181,11 +202,13 @@ public class ItemDimmerController {
     }
 
     private void collectRelatedIds(int itemId, Set<Integer> sink) {
-        if (itemId <= 0) return;
+        if (itemId <= 0)
+            return;
 
         try {
             final ItemComposition comp = itemManager.getItemComposition(itemId);
-            if (comp == null) return;
+            if (comp == null)
+                return;
 
             // Placeholder
             if (comp.getPlaceholderTemplateId() != -1) {
@@ -209,7 +232,8 @@ public class ItemDimmerController {
     private boolean isTradeableCanonical(int canonicalItemId) {
         try {
             final Boolean cached = tradeableCache.get(canonicalItemId);
-            if (cached != null) return cached;
+            if (cached != null)
+                return cached;
 
             boolean tradeable = false;
             final ItemComposition comp = itemManager.getItemComposition(canonicalItemId);

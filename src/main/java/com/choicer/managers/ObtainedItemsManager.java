@@ -29,8 +29,6 @@ public class ObtainedItemsManager {
     private static final String LEGACY_CFG_KEY = "rolled";
     private static final String LEGACY_FILE_NAME = "choicer_rolled.json";
     private static final String LEGACY_UNLOCKED_FILE = "choicer_unlocked.json";
-    private static final String LEGACY_CHOICER_UNLOCKED_FILE = "choicer_unlocked.json";
-    private static final String LEGACY_V3_OBTAINED_FILE = "choicer_obtained.json";
     private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
     private static final long CONFIG_DEBOUNCE_MS = 3000L;
     private static final long SELF_WRITE_GRACE_MS = 1500L;
@@ -165,25 +163,14 @@ public class ObtainedItemsManager {
         // Read local new first; if missing, seed from legacy rolled file (if it still
         // exists)
         Path legacyFile = safeGetFilePathOrNull(LEGACY_FILE_NAME);
-        Path legacyV3Obtained = safeGetFilePathOrNull(LEGACY_V3_OBTAINED_FILE);
-        Path legacyMarker = safeGetFilePathOrNull(LEGACY_UNLOCKED_FILE);
-        boolean legacyMarkerExists = legacyMarker != null && Files.exists(legacyMarker);
         boolean legacySeeded = false;
-        Path legacySeedPath = null;
 
         Set<Integer> localNew = readLocalJson(newFile);
         Set<Integer> local;
         if (!localNew.isEmpty() || newFileExisted) {
             local = localNew;
         } else {
-            Set<Integer> legacySet = new LinkedHashSet<>();
-            if (legacyV3Obtained != null && Files.exists(legacyV3Obtained)) {
-                legacySet = readLocalJson(legacyV3Obtained);
-                legacySeedPath = legacyV3Obtained;
-            } else if (legacyMarkerExists && legacyFile != null && Files.exists(legacyFile)) {
-                legacySet = readLocalJson(legacyFile);
-                legacySeedPath = legacyFile;
-            }
+            Set<Integer> legacySet = (legacyFile != null) ? readLocalJson(legacyFile) : new LinkedHashSet<>();
             local = legacySet;
             legacySeeded = !legacySet.isEmpty();
         }
@@ -230,9 +217,9 @@ public class ObtainedItemsManager {
             obtainedItems.clear();
             obtainedItems.addAll(winner);
         }
-        if (legacySeeded && legacySeedPath != null && Files.exists(legacySeedPath) && !newFileExisted) {
+        if (legacySeeded && legacyFile != null && Files.exists(legacyFile) && !newFileExisted) {
             try {
-                archiveLegacyFile(legacySeedPath);
+                archiveLegacyFile(legacyFile);
             } catch (IOException ioe) {
                 log.error("Failed to archive legacy rolled file during obtained migration", ioe);
             }
@@ -241,63 +228,48 @@ public class ObtainedItemsManager {
         if (needPersist) {
             long stamp = (winnerStamp != null) ? winnerStamp : System.currentTimeMillis();
             saveInternal(stamp, false); // bypass debounce during reconcile
+        } else if (!Files.exists(newFile) && isExecutorAvailable()) {
+            // Ensure file exists locally on fresh machines
+            saveInternal(System.currentTimeMillis(), false);
         }
 
         dirty = false;
     }
 
     private void migrateLegacyLocalObtainedIfNeeded() {
-        Path legacyMarker = safeGetFilePathOrNull(LEGACY_UNLOCKED_FILE);
-        Path legacyChoicerUnlocked = safeGetFilePathOrNull(LEGACY_CHOICER_UNLOCKED_FILE);
-        Path legacyV3Obtained = safeGetFilePathOrNull(LEGACY_V3_OBTAINED_FILE);
-        if (legacyMarker == null && legacyChoicerUnlocked == null && legacyV3Obtained == null)
-            return;
-
         Path obtainedFile = safeGetFilePathOrNull(FILE_NAME);
         Path legacyObtained = safeGetFilePathOrNull(LEGACY_FILE_NAME);
-        if (obtainedFile == null)
+        Path legacyUnlocked = safeGetFilePathOrNull(LEGACY_UNLOCKED_FILE);
+
+        if (obtainedFile == null || legacyObtained == null || legacyUnlocked == null)
             return;
+
         if (Files.exists(obtainedFile))
+            return;
+        if (!Files.exists(legacyUnlocked))
+            return;
+        if (!Files.exists(legacyObtained))
             return;
 
         try {
-            boolean legacyMarkerExists = legacyMarker != null && Files.exists(legacyMarker);
-            boolean legacyChoicerUnlockedExists = legacyChoicerUnlocked != null && Files.exists(legacyChoicerUnlocked);
-            boolean legacyV3ObtainedExists = legacyV3Obtained != null && Files.exists(legacyV3Obtained);
-            boolean legacyObtainedExists = legacyObtained != null && Files.exists(legacyObtained);
-
-            Path source = null;
-            if (legacyChoicerUnlockedExists) {
-                source = legacyChoicerUnlocked;
-            } else if (legacyV3ObtainedExists) {
-                source = legacyV3Obtained;
-            } else if (legacyMarkerExists && legacyObtainedExists) {
-                source = legacyObtained;
-            }
-
-            if (source == null)
-                return;
-
-            Set<Integer> legacyData = readLocalJson(source);
+            Set<Integer> legacyData = readLocalJson(legacyObtained);
             if (legacyData.isEmpty()) {
                 return;
             }
 
             Files.createDirectories(obtainedFile.getParent());
 
-            // Move legacy -> new
             try {
-                Files.move(source, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+                Files.move(legacyObtained, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
             } catch (IOException moveFail) {
-                Files.copy(source, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
-                Files.deleteIfExists(source);
+                Files.copy(legacyObtained, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+                Files.deleteIfExists(legacyObtained);
             }
 
-            log.info("Choicer v3 migration: moved legacy obtained file {} -> {}",
-                    source.getFileName(), obtainedFile.getFileName());
+            log.info("Choicer migration: moved legacy obtained file {} -> {}",
+                    legacyObtained.getFileName(), obtainedFile.getFileName());
         } catch (Exception e) {
-            log.error("Choicer v3 migration: failed to migrate legacy obtained file", e);
-            throw new RuntimeException(e);
+            log.error("Choicer migration: failed to migrate legacy obtained file", e);
         }
     }
 
@@ -492,12 +464,16 @@ public class ObtainedItemsManager {
 
     private Set<Integer> readLocalJson(Path file) {
         Set<Integer> local = new LinkedHashSet<>();
-        if (file == null || !Files.exists(file))
+        if (file == null)
             return local;
+
         try (Reader r = Files.newBufferedReader(file)) {
             Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
             if (loaded != null)
                 local.addAll(loaded);
+        } catch (NoSuchFileException ignored) {
+            // Normal on fresh installs / multi-PC / atomic move race
+            return local;
         } catch (IOException e) {
             log.error("Error reading obtained items JSON", e);
         }

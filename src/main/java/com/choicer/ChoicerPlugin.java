@@ -278,15 +278,7 @@ public class ChoicerPlugin extends Plugin {
             allTradeableItems.clear();
             for (int i = 0; i < 40000; i++) {
                 ItemComposition comp = itemManager.getItemComposition(i);
-                if (comp != null && comp.isTradeable() && !isNotTracked(i)
-                        && !ItemsFilter.isBlocked(i, config)) {
-                    if (config.freeToPlay() && comp.isMembers()) {
-                        continue;
-                    }
-                    if (!ItemsFilter.isPoisonEligible(i, config.requireWeaponPoison(),
-                            rolledItemsManager.getRolledItems())) {
-                        continue;
-                    }
+                if (isEligibleForLocking(i, comp)) {
                     allTradeableItems.add(i);
                 }
             }

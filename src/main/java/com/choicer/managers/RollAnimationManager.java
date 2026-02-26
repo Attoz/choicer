@@ -63,8 +63,7 @@ public class RollAnimationManager {
     private volatile boolean isRolling = false;
     private volatile boolean tradeablesReady = false;
     private static final int SNAP_WINDOW_MS = 350;
-    private static final String CONFIRM_SOUND_WAV = "/com/choicer/confirmation_002.wav";
-    private static final String CONFIRM_SOUND_OGG = "/com/choicer/confirmation_002.ogg";
+    private static final String CONFIRM_SOUND_PATH = "/com/choicer/confirmation.wav";
     private final Random random = new Random();
     private volatile RollOverlay activeOverlayRef;
     private volatile boolean confirmationSoundUnavailable = false;
@@ -417,7 +416,7 @@ public class RollAnimationManager {
             return;
         }
         float volumeDb = toDb(config.rollSoundVolume());
-        if (!playSoundResource(CONFIRM_SOUND_WAV, volumeDb) && !playSoundResource(CONFIRM_SOUND_OGG, volumeDb)) {
+        if (!playSoundResource(CONFIRM_SOUND_PATH, volumeDb)) {
             confirmationSoundUnavailable = true;
         }
     }

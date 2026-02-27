@@ -151,7 +151,7 @@ public class ChoicerPanel extends PluginPanel {
         discordButton.setOpaque(false);
         discordButton.setContentAreaFilled(false);
         discordButton.setBorderPainted(false);
-        discordButton.addActionListener(e -> LinkBrowser.browse("https://discord.gg/TMkAYXxncU"));
+        discordButton.addActionListener(e -> LinkBrowser.browse("https://discord.gg/jhJYKpS7G8"));
 
         headerPanel.add(iconLabel);
         headerPanel.add(titleLabel);

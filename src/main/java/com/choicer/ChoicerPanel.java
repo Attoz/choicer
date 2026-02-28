@@ -3,6 +3,7 @@ package com.choicer;
 import com.choicer.managers.ObtainedItemsManager;
 import com.choicer.managers.RollAnimationManager;
 import com.choicer.managers.RolledItemsManager;
+import com.choicer.ui.TextFitUtil;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
@@ -42,9 +43,9 @@ public class ChoicerPanel extends PluginPanel {
     private static final Color FIELD_BG = new Color(42, 36, 27);
     private static final Color BUTTON_BG = new Color(60, 63, 65);
 
-    private static final Font TITLE_FONT = new Font("Georgia", Font.BOLD, 18);
-    private static final Font UI_FONT = new Font("Georgia", Font.PLAIN, 12);
-    private static final Font SMALL_FONT = new Font("Georgia", Font.PLAIN, 11);
+    private static final Font TITLE_FONT = new Font("SansSerif", Font.BOLD, 18);
+    private static final Font UI_FONT = new Font("SansSerif", Font.PLAIN, 12);
+    private static final Font SMALL_FONT = new Font("SansSerif", Font.PLAIN, 11);
 
     private enum ListMode {
         ROLLED("Rolled"),
@@ -407,7 +408,7 @@ public class ChoicerPanel extends PluginPanel {
 
             String name = itemNameCache.get(value);
             if (name != null) {
-                nameLabel.setText(name);
+                nameLabel.setText(fitNameToCell(name, list, index));
                 setToolTipText(name);
             } else {
                 nameLabel.setText("...");
@@ -421,6 +422,32 @@ public class ChoicerPanel extends PluginPanel {
                 setBackground(index % 2 == 0 ? LIST_ROW_A : LIST_ROW_B);
             }
             return this;
+        }
+
+        private String fitNameToCell(String name, JList<? extends Integer> list, int index) {
+            if (name == null || name.isEmpty()) {
+                return "";
+            }
+
+            int cellWidth = list.getWidth();
+            if (cellWidth <= 0) {
+                Rectangle cellBounds = list.getCellBounds(index, index);
+                if (cellBounds != null) {
+                    cellWidth = cellBounds.width;
+                }
+            }
+
+            if (cellWidth <= 0) {
+                return name;
+            }
+
+            final int iconWidth = iconLabel.getPreferredSize().width;
+            final int layoutGap = 6;
+            final int textPadding = 12;
+            int maxTextWidth = Math.max(8, cellWidth - iconWidth - layoutGap - textPadding);
+
+            FontMetrics fm = list.getFontMetrics(nameLabel.getFont());
+            return TextFitUtil.elideToWidth(name, fm, maxTextWidth);
         }
     }
 

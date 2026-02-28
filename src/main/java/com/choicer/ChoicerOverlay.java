@@ -1,6 +1,7 @@
 package com.choicer;
 
 import com.choicer.filters.QuestItemAllowlist;
+import com.choicer.ui.TextFitUtil;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
@@ -58,20 +59,23 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
     private static final int SLOT_PADDING_Y = 5;
     private static final int SELECTION_TOP_MARGIN = 15;
     private static final float CHOICE_SLOT_SCALE = 1.0f;
-    private static final int MIN_CHOICE_SLOT_WIDTH = 132;
-    private static final int MIN_CHOICE_SLOT_HEIGHT = 90;
+    private static final int MIN_CHOICE_SLOT_WIDTH = 150;
+    private static final int MIN_CHOICE_SLOT_HEIGHT = 150;
     // Keep scroll slots as wide as the eventual choice buttons so icon centers
     // align.
     private static final int MIN_SCROLL_SLOT_WIDTH = MIN_CHOICE_SLOT_WIDTH;
-    private static final int SCROLL_ICON_TARGET = 64;
-    private static final int SCROLL_ICON_TARGET_COMPACT = 52;
+    private static final int SCROLL_ICON_TARGET = 44;
+    private static final int SCROLL_ICON_TARGET_COMPACT = 36;
     private static final int SCROLL_ITEM_GAP = 6;
     private static final float DEFAULT_STEP = SCROLL_ICON_TARGET + SCROLL_ITEM_GAP;
     private static final Color SLOT_BORDER = new Color(186, 148, 96, 235);
     private static final Color SLOT_FILL_TOP = new Color(54, 46, 34, 235);
     private static final Color SLOT_FILL_BOTTOM = new Color(33, 28, 22, 235);
     private static final Color SLOT_HIGHLIGHT = new Color(220, 188, 135, 95);
-    private static final Font LABEL_FONT = new Font("SansSerif", Font.BOLD, 12);
+    private static final Font LABEL_FONT = new Font("SansSerif", Font.BOLD, 10);
+    private static final Font HOVER_TOOLTIP_FONT = new Font("SansSerif", Font.PLAIN, 12);
+    private static final Color HOVER_TOOLTIP_BG = new Color(0, 0, 0, 190);
+    private static final Color HOVER_TOOLTIP_BORDER = new Color(110, 92, 64, 230);
     private static final Color TRADEABLE_GLOW_INNER = new Color(214, 184, 112, 170);
     private static final Color TRADEABLE_GLOW_OUTER = new Color(196, 168, 110, 0);
     private static final Color UNTRADEABLE_GLOW_INNER = new Color(128, 176, 148, 170);
@@ -82,7 +86,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
     private static final int ICON_COUNT = 3;
     private static final int DRAW_COUNT = ICON_COUNT + 1;
     // Ensure scroll frames mirror the spacing seen in the final choice buttons.
-    private static final int COLUMN_SPACING = 24;
+    private static final int COLUMN_SPACING = 18;
     private static final int VISIBLE_ROLLING_ITEM_COUNT = 4;
     private static final int VISIBLE_SELECTION_ITEM_COUNT = 2;
     private static final int CHOICE_BUTTON_INSET = 6;
@@ -96,7 +100,7 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
     private static final Color CHOICE_BUTTON_SHADOW = new Color(0, 0, 0, 100);
     private static final Color TOOLTIP_TEXT = new Color(238, 224, 186);
     private static final int MIN_LABEL_FONT_SIZE = 9;
-    private static final int CHOICE_LABEL_RESERVED_HEIGHT = 34;
+    private static final int CHOICE_LABEL_RESERVED_HEIGHT = 78;
     private static final int CHOICE_ICON_TOP_PADDING = 8;
     private static final int CHOICE_BUTTON_Y_OFFSET = 12;
     private static final float RESPONSIVE_BASE_VIEWPORT_HEIGHT = 900f;
@@ -463,7 +467,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
         final float maxIconWidth = slotWidth - SLOT_PADDING_X * 2f;
         final float maxIconHeight = (slotHeight - SLOT_PADDING_Y * 2f - (rollingVisibleItems - 1) * scrollGap)
                 / rollingVisibleItems;
-        final float rollingIconSize = Math.max(ICON_W, Math.min(maxIconWidth, maxIconHeight));
+        final float targetIconSize = Math.max(ICON_W, iconTargetSize);
+        final float rollingIconSize = Math.max(ICON_W, Math.min(targetIconSize, Math.min(maxIconWidth, maxIconHeight)));
         final int iconSize = Math.max(1, Math.round(rollingIconSize));
         final float activeStep = iconSize + scrollGap;
         final int iconPadX = Math.max(SLOT_PADDING_X, (slotWidth - iconSize) / 2);
@@ -701,7 +706,8 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
         final float maxIconWidth = slotWidth - SLOT_PADDING_X * 2f;
         final float maxIconHeight = (slotHeight - SLOT_PADDING_Y * 2f - (rollingVisibleItems - 1) * scrollGap)
                 / rollingVisibleItems;
-        final float rollingIconSize = Math.max(ICON_W, Math.min(maxIconWidth, maxIconHeight));
+        final float targetIconSize = Math.max(ICON_W, iconTargetSize);
+        final float rollingIconSize = Math.max(ICON_W, Math.min(targetIconSize, Math.min(maxIconWidth, maxIconHeight)));
         final int iconSize = Math.max(1, Math.round(rollingIconSize));
         final int iconPadX = Math.max(SLOT_PADDING_X, (slotWidth - iconSize) / 2);
         final int[] columnXs = new int[localColumnCount];
@@ -917,6 +923,13 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
                     animate,
                     intensity,
                     dimAlpha);
+        }
+
+        if (hoveredIndex >= 0 && hoveredIndex < drawCount && mouse != null) {
+            String hoverText = buildHoverText(optionsSnapshot.get(hoveredIndex));
+            if (hoverText != null && !hoverText.trim().isEmpty()) {
+                drawChoiceHoverTooltip(g, hoverText, mouse, buttonRects.get(hoveredIndex));
+            }
         }
     }
 
@@ -1466,8 +1479,9 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
         Font oldFont = g.getFont();
         int paddingX = 8;
         int paddingY = 6;
+        int labelTopGap = 6;
         int maxWidth = Math.max(12, rect.width - paddingX * 2);
-        int availableTop = iconRect.y + iconRect.height + 4;
+        int availableTop = iconRect.y + iconRect.height + labelTopGap;
         int availableBottom = rect.y + rect.height - paddingY;
         int availableHeight = Math.max(0, availableBottom - availableTop);
         if (availableHeight <= 0) {
@@ -1486,7 +1500,12 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
             if (lines.isEmpty()) {
                 continue;
             }
-            int textBlockHeight = fm.getHeight() * lines.size();
+            int lineHeight = fm.getHeight();
+            int maxLinesThatFit = Math.max(1, availableHeight / Math.max(1, lineHeight));
+            if (lines.size() > maxLinesThatFit) {
+                lines = Collections.singletonList(TextFitUtil.elideToWidth(label, fm, maxWidth));
+            }
+            int textBlockHeight = lineHeight * lines.size();
             if (textBlockHeight <= availableHeight || size == MIN_LABEL_FONT_SIZE) {
                 break;
             }
@@ -1498,25 +1517,127 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
         }
 
         int lineHeight = fm.getHeight();
-        int textBlockHeight = lineHeight * lineCount;
-        int startY;
-        if (availableHeight >= textBlockHeight) {
-            startY = availableTop + (availableHeight - textBlockHeight) / 2 + fm.getAscent();
-        } else {
-            startY = availableBottom - textBlockHeight + fm.getAscent();
+        if (lineHeight > availableHeight) {
+            g.setFont(oldFont);
+            return;
         }
+        int startY = availableTop + fm.getAscent();
 
         for (int i = 0; i < lineCount; i++) {
             String line = lines.get(i);
             int textWidth = fm.stringWidth(line);
             int x = rect.x + Math.max(paddingX, (rect.width - textWidth) / 2);
             int y = startY + i * lineHeight;
+            if (y > availableBottom) {
+                break;
+            }
             g.setColor(new Color(0, 0, 0, 140));
             g.drawString(line, x + 1, y + 1);
             g.setColor(TOOLTIP_TEXT);
             g.drawString(line, x, y);
         }
         g.setFont(oldFont);
+    }
+
+    private void drawChoiceHoverTooltip(Graphics2D g, String text, Point mouse, Rectangle anchorRect) {
+        String trimmed = text == null ? "" : text.trim();
+        if (trimmed.isEmpty()) {
+            return;
+        }
+
+        Font oldFont = g.getFont();
+        Color oldColor = g.getColor();
+        Composite oldComposite = g.getComposite();
+
+        g.setFont(HOVER_TOOLTIP_FONT);
+        FontMetrics fm = g.getFontMetrics();
+        if (fm == null) {
+            g.setFont(oldFont);
+            return;
+        }
+
+        Rectangle clip = g.getClipBounds();
+        if (clip == null || clip.width <= 0 || clip.height <= 0) {
+            clip = new Rectangle(
+                    client.getViewportXOffset(),
+                    client.getViewportYOffset(),
+                    Math.max(1, client.getViewportWidth()),
+                    Math.max(1, client.getViewportHeight()));
+        }
+
+        final int paddingX = 6;
+        final int paddingY = 5;
+        final int lineGap = 2;
+        final int tooltipMaxWidth = Math.max(80, Math.min(320, clip.width - 16));
+        final int contentMaxWidth = Math.max(12, tooltipMaxWidth - paddingX * 2);
+
+        List<String> lines = TextFitUtil.wrapToWidth(trimmed, fm, contentMaxWidth);
+        if (lines.isEmpty()) {
+            g.setFont(oldFont);
+            g.setColor(oldColor);
+            g.setComposite(oldComposite);
+            return;
+        }
+
+        int lineHeight = fm.getHeight();
+        int maxLinesByHeight = Math.max(1, (clip.height - 12 - paddingY * 2 + lineGap) / (lineHeight + lineGap));
+        if (lines.size() > maxLinesByHeight) {
+            List<String> limited = new ArrayList<>(lines.subList(0, maxLinesByHeight));
+            int last = limited.size() - 1;
+            limited.set(last, TextFitUtil.elideToWidth(limited.get(last), fm, contentMaxWidth));
+            lines = limited;
+        }
+
+        int textWidth = 0;
+        for (String line : lines) {
+            textWidth = Math.max(textWidth, fm.stringWidth(line));
+        }
+        int boxWidth = Math.min(tooltipMaxWidth, textWidth + paddingX * 2);
+        int boxHeight = paddingY * 2 + lines.size() * lineHeight + (Math.max(0, lines.size() - 1) * lineGap);
+
+        int x = mouse.getX() + 12;
+        int y = mouse.getY() - boxHeight - 10;
+
+        int minX = clip.x + 4;
+        int maxX = clip.x + clip.width - boxWidth - 4;
+        if (maxX >= minX) {
+            x = Math.max(minX, Math.min(x, maxX));
+        } else {
+            x = clip.x;
+        }
+
+        int minY = clip.y + 4;
+        int maxY = clip.y + clip.height - boxHeight - 4;
+        if (y < minY) {
+            int belowAnchor = anchorRect.y + anchorRect.height + 8;
+            int belowCursor = mouse.getY() + 12;
+            y = Math.max(belowAnchor, belowCursor);
+        }
+        if (maxY >= minY) {
+            y = Math.max(minY, Math.min(y, maxY));
+        } else {
+            y = clip.y;
+        }
+
+        g.setComposite(AlphaComposite.SrcOver);
+        g.setColor(HOVER_TOOLTIP_BG);
+        g.fillRoundRect(x, y, boxWidth, boxHeight, 6, 6);
+        g.setColor(HOVER_TOOLTIP_BORDER);
+        g.drawRoundRect(x, y, boxWidth, boxHeight, 6, 6);
+
+        int textX = x + paddingX;
+        int textY = y + paddingY + fm.getAscent();
+        for (String line : lines) {
+            g.setColor(new Color(0, 0, 0, 150));
+            g.drawString(line, textX + 1, textY + 1);
+            g.setColor(TOOLTIP_TEXT);
+            g.drawString(line, textX, textY);
+            textY += lineHeight + lineGap;
+        }
+
+        g.setFont(oldFont);
+        g.setColor(oldColor);
+        g.setComposite(oldComposite);
     }
 
     private List<String> wrapToTwoLines(String text, FontMetrics fm, int maxWidth) {
@@ -1547,37 +1668,17 @@ public class ChoicerOverlay extends Overlay implements RollOverlay {
 
         List<String> lines = new ArrayList<>(2);
         if (!bestFirst.isEmpty() && !bestSecond.isEmpty()) {
-            lines.add(elideToWidth(bestFirst, fm, maxWidth));
-            lines.add(elideToWidth(bestSecond, fm, maxWidth));
+            lines.add(TextFitUtil.elideToWidth(bestFirst, fm, maxWidth));
+            lines.add(TextFitUtil.elideToWidth(bestSecond, fm, maxWidth));
             return lines;
         }
 
         int cutoff = Math.max(1, Math.min(trimmed.length(), trimmed.length() / 2));
         String first = trimmed.substring(0, cutoff);
         String second = trimmed.substring(cutoff);
-        lines.add(elideToWidth(first, fm, maxWidth));
-        lines.add(elideToWidth(second, fm, maxWidth));
+        lines.add(TextFitUtil.elideToWidth(first, fm, maxWidth));
+        lines.add(TextFitUtil.elideToWidth(second, fm, maxWidth));
         return lines;
-    }
-
-    private String elideToWidth(String text, FontMetrics fm, int maxWidth) {
-        String trimmed = text.trim();
-        if (trimmed.isEmpty() || fm.stringWidth(trimmed) <= maxWidth) {
-            return trimmed;
-        }
-        String ellipsis = "...";
-        int ellipsisWidth = fm.stringWidth(ellipsis);
-        if (ellipsisWidth >= maxWidth) {
-            return ellipsis;
-        }
-        int end = trimmed.length();
-        while (end > 0 && fm.stringWidth(trimmed.substring(0, end)) + ellipsisWidth > maxWidth) {
-            end--;
-        }
-        if (end <= 0) {
-            return ellipsis;
-        }
-        return trimmed.substring(0, end) + ellipsis;
     }
 
     private String getItemNameSafe(int itemId) {

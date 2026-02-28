@@ -3,6 +3,7 @@ package com.choicer.ui;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.FontMetrics;
+import java.awt.Font;
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.util.Map;
@@ -25,6 +26,8 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 @Singleton
 public class DropsTooltipOverlay extends Overlay
 {
+    private static final Font TOOLTIP_FONT = new Font("SansSerif", Font.PLAIN, 12);
+
     private final Client client;
     private final MusicWidgetController widgetController;
 
@@ -63,6 +66,8 @@ public class DropsTooltipOverlay extends Overlay
 
     private void drawTooltip(Graphics2D g, String name, String rarity, Point mouse)
     {
+        Font oldFont = g.getFont();
+        g.setFont(TOOLTIP_FONT);
         FontMetrics fm = g.getFontMetrics();
         int padding = 4;
         int gap = 2;
@@ -103,6 +108,7 @@ public class DropsTooltipOverlay extends Overlay
 
         g.setColor(Color.ORANGE);
         g.drawString(rarity, x + padding + prefixW, rateBase);
+        g.setFont(oldFont);
     }
 
     private void drawBox(Graphics2D g, int x, int y, int w, int h)

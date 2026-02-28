@@ -39,11 +39,9 @@ public class ChoicerOverlayHitboxTest {
         // Initialize the overlay with all required dependencies
         choicerOverlay = new ChoicerOverlay(client, itemManager);
         choicerOverlay.setConfig(config);
-        choicerOverlay = spy(choicerOverlay);
-        
-        // Set overlay position and mock bounds
+
+        // Set overlay position
         choicerOverlay.setPosition(OverlayPosition.DYNAMIC);
-        doReturn(new Rectangle(100, 100, 400, 200)).when(choicerOverlay).getBounds();
     }
 
     @Test
@@ -66,8 +64,9 @@ public class ChoicerOverlayHitboxTest {
         assertEquals("Should return the correct item ID", options.get(0), result);
 
         // Click outside any button
-        Rectangle bounds = choicerOverlay.getBounds();
-        result = choicerOverlay.getOptionAt(bounds.x - 20, bounds.y - 20);
+        int outsideX = hitboxes.stream().mapToInt(r -> r.x).min().orElse(0) - 20;
+        int outsideY = hitboxes.stream().mapToInt(r -> r.y).min().orElse(0) - 20;
+        result = choicerOverlay.getOptionAt(outsideX, outsideY);
         assertNull("Should not detect click outside buttons", result);
     }
 
@@ -93,11 +92,10 @@ public class ChoicerOverlayHitboxTest {
         }
 
         // Click between first and second buttons
-        Rectangle bounds = choicerOverlay.getBounds();
         Rectangle first = hitboxes.get(0);
         Rectangle second = hitboxes.get(1);
-        int betweenX = bounds.x + first.x + first.width + gapBetween(first, second) / 2;
-        int betweenY = bounds.y + first.y + first.height / 2;
+        int betweenX = first.x + first.width + gapBetween(first, second) / 2;
+        int betweenY = first.y + first.height / 2;
         Integer result = choicerOverlay.getOptionAt(betweenX, betweenY);
         assertNull("Should not detect click between buttons", result);
     }
@@ -114,18 +112,17 @@ public class ChoicerOverlayHitboxTest {
 
         List<Rectangle> hitboxes = choicerOverlay.getCurrentHitboxes();
         assertEquals("Should create hitboxes for each option", options.size(), hitboxes.size());
-        Rectangle bounds = choicerOverlay.getBounds();
 
         // Test edge of first button (top-left corner)
         Rectangle first = hitboxes.get(0);
-        Integer result = choicerOverlay.getOptionAt(bounds.x + first.x, bounds.y + first.y);
+        Integer result = choicerOverlay.getOptionAt(first.x, first.y);
         assertNotNull("Should detect click on edge of first button", result);
         assertEquals("Should return the first item ID", (Integer) 123, result);
 
         // Test between buttons (should not register)
         Rectangle second = hitboxes.get(1);
-        int betweenX = bounds.x + first.x + first.width + gapBetween(first, second) / 2;
-        int betweenY = bounds.y + first.y + first.height / 2;
+        int betweenX = first.x + first.width + gapBetween(first, second) / 2;
+        int betweenY = first.y + first.height / 2;
         result = choicerOverlay.getOptionAt(betweenX, betweenY);
         assertNull("Should not detect click between buttons", result);
     }
@@ -146,9 +143,8 @@ public class ChoicerOverlayHitboxTest {
     }
 
     private Point getCenterOfScreenHitbox(Rectangle hitbox) {
-        Rectangle bounds = choicerOverlay.getBounds();
-        int x = bounds.x + hitbox.x + hitbox.width / 2;
-        int y = bounds.y + hitbox.y + hitbox.height / 2;
+        int x = hitbox.x + hitbox.width / 2;
+        int y = hitbox.y + hitbox.height / 2;
         return new Point(x, y);
     }
 
